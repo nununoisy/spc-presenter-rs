@@ -1,0 +1,315 @@
+import { VerticalBox, ComboBox, CheckBox, Button, StandardButton, LineEdit, ListView } from "std-widgets.slint";
+import { ColorPickerButton } from "./color-picker.slint";
+
+export global SampleUtils {
+    pure callback format-hex(int) -> string;
+    pure callback is-hex(string) -> bool;
+    pure callback parse-hex(string) -> int;
+}
+
+export enum PitchType {
+    Automatic, Frequency, AddMusicK
+}
+
+export struct SampleConfig {
+    name: string,
+    source: int,
+    pitch-type: PitchType,
+    frequency: float,
+    amk-tuning: int,
+    amk-subtuning: int,
+    color: [int],
+    use-color: bool
+}
+
+export component SampleConfigWidget {
+    in-out property <[SampleConfig]> sample-configs: [];
+    in property <bool> enabled: true;
+
+    property <int> selected-sample-index: -1;
+
+    property <string> i-name: "<no name>";
+    property <int> i-source: 0;
+    property <int> i-pitch-type-index: 0;
+    property <string> i-pitch-type-string: "Automatic";
+    property <PitchType> i-pitch-type: PitchType.Automatic;
+    property <string> i-frequency: "500.0";
+    property <string> i-amk-tuning: "$03";
+    property <string> i-amk-subtuning: "$00";
+    property <[int]> i-color: [0, 0, 0];
+    property <bool> i-use-color: false;
+
+    callback add-sample(int) -> int;
+    callback remove-sample(int) -> int;
+
+    function i-update-pitch-type() {
+        if (root.i-pitch-type-index == 0) {
+            root.i-pitch-type = PitchType.Automatic;
+            root.i-pitch-type-string = "Automatic";
+        } else if (root.i-pitch-type-index == 1) {
+            root.i-pitch-type = PitchType.Frequency;
+            root.i-pitch-type-string = "Frequency";
+        } else if (root.i-pitch-type-index == 2) {
+            root.i-pitch-type = PitchType.AddMusicK;
+            root.i-pitch-type-string = "AddMusicK tuning";
+        }
+    }
+
+    function i-update-pitch-type-index() {
+        if (root.i-pitch-type == PitchType.Automatic) {
+            root.i-pitch-type-index = 0;
+            root.i-pitch-type-string = "Automatic";
+        } else if (root.i-pitch-type == PitchType.Frequency) {
+            root.i-pitch-type-index = 1;
+            root.i-pitch-type-string = "Frequency";
+        } else if (root.i-pitch-type == PitchType.AddMusicK) {
+            root.i-pitch-type-index = 2;
+            root.i-pitch-type-string = "AddMusicK tuning";
+        }
+    }
+
+    function i-switch-selected-sample() {
+        if (root.selected-sample-index != -1) {
+            root.i-name = root.sample-configs[root.selected-sample-index].name;
+            root.i-source = root.sample-configs[root.selected-sample-index].source;
+            root.i-pitch-type = root.sample-configs[root.selected-sample-index].pitch-type;
+            root.i-update-pitch-type-index();
+            root.i-frequency = root.sample-configs[root.selected-sample-index].frequency;
+            root.i-amk-tuning = SampleUtils.format-hex(root.sample-configs[root.selected-sample-index].amk-tuning);
+            root.i-amk-subtuning = SampleUtils.format-hex(root.sample-configs[root.selected-sample-index].amk-subtuning);
+            root.i-color = root.sample-configs[root.selected-sample-index].color;
+            root.i-use-color = root.sample-configs[root.selected-sample-index].use-color;
+        }
+    }
+
+    HorizontalLayout {
+        alignment: stretch;
+        padding: 0;
+
+        VerticalBox {
+            width: 120px;
+
+            ListView {
+                height: 120px;
+
+                for sample-config[i] in root.sample-configs: Rectangle {
+                    height: 20px;
+                    background: i == root.selected-sample-index ? (root.enabled ? #60cdff : #313131) : transparent;
+
+                    Text {
+                        text: SampleUtils.format-hex(sample-config.source);
+                        color: (i == root.selected-sample-index && root.enabled) ? #000000 : #ffffff;
+                    }
+
+                    TouchArea {
+                        x: 0;
+                        y: 0;
+                        width: parent.width;
+                        height: parent.height;
+
+                        clicked => {
+                            if (root.enabled) {
+                                root.selected-sample-index = i;
+                                root.i-switch-selected-sample();
+                            }
+                        }
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                alignment: stretch;
+
+                Rectangle {
+                    horizontal-stretch: 1.0;
+                }
+                Button {
+                    icon: @image-url("add.svg");
+                    enabled: root.enabled;
+                    clicked => {
+                        i-add-sample-popup.show();
+                    }
+                }
+                Rectangle {
+                    width: 10px;
+                }
+                Button {
+                    icon: @image-url("subtract.svg");
+                    enabled: root.enabled;
+                    clicked => {
+                        root.selected-sample-index = root.remove-sample(root.selected-sample-index);
+                        root.i-switch-selected-sample();
+                    }
+                }
+            }
+
+            i-add-sample-popup := PopupWindow {
+                width: 100px;
+                close-on-click: false;
+
+                Rectangle {
+                    height: 100%;
+                    width: 100%;
+                    background: #1c1c1c;
+                    border-radius: 2px;
+                }
+                VerticalBox {
+                    alignment: start;
+                    spacing: 8px;
+
+                    HorizontalLayout {
+                        alignment: stretch;
+                        spacing: 6px;
+
+                        Text {
+                            text: "Source index:";
+                        }
+                        i-popup-source-edit := LineEdit {
+                            text: "$";
+                        }
+                    }
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 6px;
+
+                        StandardButton {
+                            kind: ok;
+                            clicked => {
+                                if (!root.enabled) {
+                                    i-add-sample-popup.close();
+                                } else if (SampleUtils.is-hex(i-popup-source-edit.text)) {
+                                    root.selected-sample-index = root.add-sample(SampleUtils.parse-hex(i-popup-source-edit.text));
+                                    root.i-switch-selected-sample();
+                                    i-add-sample-popup.close();
+                                } else if (i-popup-source-edit.text.is-float() && Math.floor(i-popup-source-edit.text.to-float()) == i-popup-source-edit.text.to-float()) {
+                                    root.selected-sample-index = root.add-sample(i-popup-source-edit.text.to-float());
+                                    root.i-switch-selected-sample();
+                                    i-add-sample-popup.close();
+                                }
+                            }
+                        }
+                        StandardButton {
+                            kind: cancel;
+                            clicked => {
+                                i-add-sample-popup.close();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if root.selected-sample-index == -1: VerticalBox {
+            horizontal-stretch: 1.0;
+            alignment: stretch;
+            spacing: 12px;
+
+            Text {
+                text: "<no sample selected>";
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+        }
+
+        if root.selected-sample-index != -1: VerticalBox {
+            horizontal-stretch: 1.0;
+            alignment: start;
+            spacing: 12px;
+
+            Text {
+                text: "Sample " + SampleUtils.format-hex(root.i-source) + ": " + root.i-name;
+                vertical-alignment: center;
+            }
+
+            HorizontalLayout {
+                alignment: stretch;
+                spacing: 6px;
+
+                Text {
+                    text: "Pitch:";
+                    vertical-alignment: center;
+                }
+                ComboBox {
+                    enabled: root.enabled;
+                    model: ["Automatic", "Frequency", "AddMusicK tuning"];
+                    current-index <=> root.i-pitch-type-index;
+                    current-value <=> root.i-pitch-type-string;
+                    selected => {
+                        root.i-update-pitch-type();
+                        if (root.selected-sample-index != -1) {
+                            root.sample-configs[root.selected-sample-index].pitch-type = root.i-pitch-type;
+                        }
+                    }
+                }
+
+                if root.i-pitch-type == PitchType.Frequency: LineEdit {
+                    text <=> root.i-frequency;
+                    enabled: root.enabled;
+                    edited => {
+                        if (root.i-frequency.is-float() && root.selected-sample-index != -1) {
+                            root.sample-configs[root.selected-sample-index].frequency = root.i-frequency.to-float();
+                        }
+                    }
+                }
+                if root.i-pitch-type == PitchType.Frequency: Text {
+                    text: "Hz";
+                    vertical-alignment: center;
+                }
+
+                if root.i-pitch-type == PitchType.AddMusicK: Text {
+                    text: "Tuning:";
+                    vertical-alignment: center;
+                }
+                if root.i-pitch-type == PitchType.AddMusicK: LineEdit {
+                    text <=> root.i-amk-tuning;
+                    enabled: root.enabled;
+                    width: 50px;
+                    edited => {
+                        if (SampleUtils.is-hex(root.i-amk-tuning) && root.selected-sample-index != -1) {
+                            root.sample-configs[root.selected-sample-index].amk-tuning = SampleUtils.parse-hex(root.i-amk-tuning);
+                        }
+                    }
+                }
+                if root.i-pitch-type == PitchType.AddMusicK: Text {
+                    text: "Subtuning:";
+                    vertical-alignment: center;
+                }
+                if root.i-pitch-type == PitchType.AddMusicK: LineEdit {
+                    text <=> root.i-amk-subtuning;
+                    enabled: root.enabled;
+                    width: 50px;
+                    edited => {
+                        if (SampleUtils.is-hex(root.i-amk-subtuning) && root.selected-sample-index != -1) {
+                            root.sample-configs[root.selected-sample-index].amk-subtuning = SampleUtils.parse-hex(root.i-amk-subtuning);
+                        }
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                alignment: stretch;
+
+                CheckBox {
+                    text: "Per-sample color:";
+                    enabled: root.enabled;
+                    checked <=> root.i-use-color;
+                    toggled => {
+                        if (root.selected-sample-index != -1) {
+                            root.sample-configs[root.selected-sample-index].use-color = root.i-use-color;
+                        }
+                    }
+                }
+                ColorPickerButton {
+                    color <=> root.i-color;
+                    enabled: root.i-use-color && root.enabled;
+                    changed(r, g, b) => {
+                        if (root.selected-sample-index != -1) {
+                            root.i-color = [r, g, b];
+                            root.sample-configs[root.selected-sample-index].color = [r, g, b];
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

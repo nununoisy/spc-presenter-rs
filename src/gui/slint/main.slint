@@ -1,0 +1,344 @@
+import { VerticalBox, Button, StandardButton, SpinBox, CheckBox, LineEdit, ComboBox } from "std-widgets.slint";
+import { PitchType, SampleConfig, SampleUtils, SampleConfigWidget } from "./sample-config.slint";
+export { PitchType, SampleConfig, SampleUtils }
+import { ColorUtils, ColorPickerButton } from "./color-picker.slint";
+export { ColorUtils }
+
+export enum StopConditionType {
+    Frames, Time, SpcDuration
+}
+
+component FileBrowser {
+    callback browse() -> string;
+    callback cleared();
+
+    in property <string> text: "File:";
+    in property <bool> enabled: true;
+    in property <bool> clearable: false;
+    out property <string> path: "";
+
+    HorizontalLayout {
+        alignment: stretch;
+        spacing: 8px;
+        Text {
+            text: root.text;
+            vertical-alignment: center;
+        }
+        LineEdit {
+            enabled: false;
+            text: path;
+            placeholder-text: "No file selected";
+        }
+        Button {
+            text: "Browse...";
+            enabled: root.enabled;
+            clicked => {
+                root.path = root.browse();
+            }
+        }
+        if root.clearable: Button {
+            text: "Clear";
+            enabled: root.enabled;
+            clicked => {
+                root.path = "";
+                root.cleared();
+            }
+        }
+    }
+}
+
+export component MainWindow inherits Window {
+    callback browse-for-module() -> string;
+    callback browse-for-background() -> string;
+    callback background-cleared();
+    callback import-tunings();
+    callback format-duration(StopConditionType, int) -> string;
+    callback start-render();
+    callback cancel-render();
+    callback add-sample(int) -> int;
+    callback remove-sample(int) -> int;
+
+    in property <bool> rendering;
+    in property <float> progress: 0.0;
+    in property <string> progress-title: "Idle";
+    in property <string> progress-status: "";
+    in property <bool> progress-error: false;
+
+    in property <[string]> metadata-lines: ["<no metadata>"];
+    in-out property <[[int]]> channel-base-colors: [
+        [255, 160, 160],
+        [255, 224, 160],
+        [64, 255, 64],
+        [192, 192, 192],
+        [154, 79, 255],
+        [56, 171, 242],
+        [172, 237, 50],
+        [36, 123, 160]
+    ];
+    in-out property <[SampleConfig]> sample-configs: [];
+    in-out property <int> fadeout-duration: 180;
+    in-out property <int> output-width: 1920;
+    in-out property <int> output-height: 1080;
+    in-out property <bool> filter-enabled: true;
+    in-out property <bool> accurate-interp: true;
+
+    out property <StopConditionType> stop-condition-type: StopConditionType.Time;
+    out property <int> stop-condition-num: 300;
+
+    public function reformat-duration() {
+        i-formatted-duration.text = root.format-duration(root.stop-condition-type, root.stop-condition-num);
+    }
+
+    title: "SPCPresenter";
+    icon: @image-url("spc-presenter-icon.png");
+
+    VerticalBox {
+        alignment: start;
+        spacing: 12px;
+
+        Text {
+            text: "SPCPresenter";
+            font-size: 32px;
+            horizontal-alignment: center;
+        }
+        FileBrowser {
+            text: "Input SPC:";
+            enabled: !root.rendering;
+            browse => { root.browse-for-module() }
+        }
+        for line in metadata-lines: Text {
+            horizontal-alignment: center;
+            text: line;
+        }
+
+        HorizontalLayout {
+            height: 28px;
+            Text {
+                text: "Base channel colors:";
+                vertical-alignment: center;
+            }
+            Rectangle {
+                width: 6px;
+            }
+            for color[i] in channel-base-colors: ColorPickerButton {
+                color: color;
+                enabled: !root.rendering;
+                changed(r, g, b) => {
+                    root.channel-base-colors[i] = [r, g, b];
+                }
+            }
+        }
+        HorizontalLayout {
+            height: 28px;
+            Text {
+                text: "Sample configuration:";
+                vertical-alignment: center;
+            }
+            Rectangle {
+                horizontal-stretch: 2.0;
+            }
+            Button {
+                text: "Import tunings...";
+                enabled: !root.rendering;
+                clicked => {
+                    root.import-tunings();
+                }
+            }
+        }
+
+        SampleConfigWidget {
+            sample-configs: root.sample-configs;
+            enabled: !root.rendering;
+
+            add-sample(s) => { root.add-sample(s) }
+            remove-sample(i) => { root.remove-sample(i) }
+        }
+
+        FileBrowser {
+            text: "Background:";
+            enabled: !root.rendering;
+            clearable: true;
+            browse => { root.browse-for-background() }
+            cleared => { root.background-cleared(); }
+        }
+
+        HorizontalLayout {
+            alignment: stretch;
+            spacing: 8px;
+            Text {
+                text: "Render duration:";
+                vertical-alignment: center;
+            }
+            if stop-condition-type != StopConditionType.SpcDuration : LineEdit {
+                enabled: !rendering;
+                text: stop-condition-num;
+                edited => {
+                    if (self.text.is-float()) {
+                        root.stop-condition-num = self.text.to-float();
+                        root.reformat-duration();
+                    }
+                }
+            }
+            ComboBox {
+                model: ["seconds", "frames", "SPC duration"];
+                enabled: !rendering;
+                selected => {
+                    if (self.current-index == 0) {
+                        root.stop-condition-type = StopConditionType.Time;
+                    } else if (self.current-index == 1) {
+                        root.stop-condition-type = StopConditionType.Frames;
+                    } else if (self.current-index == 2) {
+                        root.stop-condition-type = StopConditionType.SpcDuration;
+                    }
+                    root.reformat-duration();
+                }
+            }
+            i-formatted-duration := Text {
+                text: "00:05:00";
+                vertical-alignment: center;
+                color: self.text == "<error>"
+                    ? red
+                    : white;
+            }
+        }
+
+        HorizontalLayout {
+            alignment: stretch;
+            spacing: 8px;
+            Text {
+                text: "Fadeout frames:";
+                vertical-alignment: center;
+            }
+            SpinBox {
+                value <=> root.fadeout-duration;
+                minimum: 0;
+                maximum: 1200;
+                enabled: !root.rendering;
+            }
+        }
+
+        HorizontalLayout {
+            alignment: stretch;
+            spacing: 8px;
+            Text {
+                text: "Output video size:";
+                vertical-alignment: center;
+            }
+            SpinBox {
+                value <=> root.output-width;
+                minimum: 960;
+                maximum: 7680;
+                enabled: !root.rendering;
+            }
+            Text {
+                text: "×";
+                vertical-alignment: center;
+            }
+            SpinBox {
+                value <=> root.output-height;
+                minimum: 540;
+                maximum: 4320;
+                enabled: !root.rendering;
+            }
+            Button {
+                text: "1080p";
+                enabled: !rendering;
+                clicked => {
+                    root.output-width = 1920;
+                    root.output-height = 1080;
+                }
+            }
+            Button {
+                text: "4K";
+                enabled: !root.rendering;
+                clicked => {
+                    root.output-width = 3840;
+                    root.output-height = 2160;
+                }
+            }
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: 8px;
+            CheckBox {
+                text: "Use Blargg's DSP post-filter";
+                checked <=> filter-enabled;
+                enabled: !root.rendering;
+            }
+            CheckBox {
+                text: "Accurate interpolation";
+                checked <=> accurate-interp;
+                enabled: !root.rendering;
+            }
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            Button {
+                text: rendering
+                    ? "Cancel"
+                    : "Render!";
+                primary: !root.rendering;
+                clicked => {
+                    if (root.rendering) {
+                        root.cancel_render();
+                    } else {
+                        root.start_render();
+                    }
+                }
+            }
+        }
+
+        VerticalBox {
+            alignment: start;
+            spacing: 8px;
+
+            Text {
+                text: root.progress-title;
+                font-size: 16px;
+            }
+            Rectangle {
+                height: 6px;
+
+                border-width: 1px;
+                border-radius: 3px;
+                border-color: #313131;  // Palette.neutralLighter
+                background: #313131;  // Palette.neutralLighter
+
+                Rectangle {
+                    x: 0;
+                    y: 0;
+                    height: parent.height;
+                    width: Math.max(0.0, Math.min(root.progress, 1.0)) * parent.width;
+
+                    border-width: 1px;
+                    border-radius: 3px;
+                    border-color: root.progress-error ? #bc2f32 : #60cdff;  // Palette.themePrimary
+                    background: root.progress-error ? #bc2f32 : #60cdff;  // Palette.themePrimary
+
+                    animate width {
+                        duration: 100ms;
+                        easing: ease-in-out;
+                    }
+                }
+            }
+            HorizontalLayout {
+                alignment: start;
+                spacing: 6px;
+
+                if root.progress-error: Image {
+                    colorize: #bc2f32;
+                    height: 16px;
+                    width: 16px;
+                    source: @image-url("circle-error.svg");
+                }
+                Text {
+                    text: root.progress-status;
+                    color: root.progress-error ? #bc2f32 : #ffffff;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}

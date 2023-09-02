@@ -1,0 +1,23 @@
+[package]
+name = "pitch-detection"
+description = "A collection of algorithms to determine the pitch of a sound sample."
+version = "0.3.0"
+authors = ["Alessandro Genova <ales.genova@gmail.com>"]
+edition = "2021"
+license = "MIT/Apache-2.0"
+homepage = "https://github.com/alesgenova/pitch-detection"
+repository = "https://github.com/alesgenova/pitch-detection"
+keywords = ["pitch", "frequency", "detection", "sound"]
+categories = ["algorithms", "multimedia::audio", "no-std"]
+readme = "README.md"
+
+[dependencies]
+rustfft = { version = "6.0.1", default-features = false }
+
+[dev-dependencies]
+criterion = "0.3"
+hound = { version = "3.4.0" }
+
+[[bench]]
+name = "utils_benchmark"
+harness = false
