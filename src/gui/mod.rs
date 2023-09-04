@@ -528,6 +528,9 @@ pub fn run() {
                 .collect();
             options.borrow_mut().channel_base_colors = base_colors;
 
+            options.borrow_mut().manual_sample_tunings.clear();
+            options.borrow_mut().per_sample_colors.clear();
+
             let sample_configs: Vec<SampleConfig> = main_window_weak.unwrap().get_sample_configs()
                 .as_any()
                 .downcast_ref::<slint::VecModel<SampleConfig>>()
