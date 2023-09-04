@@ -153,7 +153,6 @@ impl Apu {
 
     pub fn clear_echo_buffer(&mut self) {
         let dsp = self.dsp.as_mut().unwrap();
-        println!("Clearing echo buffer: ESA=${:04x} EDL*800h=${:04x}", dsp.get_echo_start_address(), dsp.calculate_echo_length());
         let length = dsp.calculate_echo_length();
         let mut end_addr = dsp.get_echo_start_address() as i32 + length;
         if end_addr > RAM_LEN as i32 {
@@ -179,14 +178,12 @@ impl Apu {
             // self.write_u8(0xf7, 0x00);
             self.ram[0xf6] = 0;
             self.ram[0xf7] = 0;
-            println!("Clearing PORT2/PORT3");
         }
         if (value & 0x10) != 0 {
             // self.write_u8(0xf4, 0x00);
             // self.write_u8(0xf5, 0x00);
             self.ram[0xf4] = 0;
             self.ram[0xf5] = 0;
-            println!("Clearing PORT0/PORT1");
         }
         self.timers[0].set_start_stop_bit((value & 0x01) != 0);
         self.timers[1].set_start_stop_bit((value & 0x02) != 0);
