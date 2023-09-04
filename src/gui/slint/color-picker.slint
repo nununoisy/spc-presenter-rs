@@ -169,7 +169,10 @@ export component ColorPickerButton {
                     r: color[0];
                     g: color[1];
                     b: color[2];
-                    changed(r, g, b) => { root.changed(r, g, b); }
+                    changed(r, g, b) => {
+                        root.color = [r, g, b];
+                        root.changed(r, g, b);
+                    }
                 }
                 StandardButton {
                     kind: ok;

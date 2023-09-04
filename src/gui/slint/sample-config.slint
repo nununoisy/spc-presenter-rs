@@ -304,8 +304,7 @@ export component SampleConfigWidget {
                     enabled: root.i-use-color && root.enabled;
                     changed(r, g, b) => {
                         if (root.selected-sample-index != -1) {
-                            root.i-color = [r, g, b];
-                            root.sample-configs[root.selected-sample-index].color = [r, g, b];
+                            root.sample-configs[root.selected-sample-index].color = root.i-color;
                         }
                     }
                 }
