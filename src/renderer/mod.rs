@@ -71,7 +71,7 @@ impl Renderer {
         self.emulator.set_filter_enabled(self.options.filter_enabled);
 
         for (i, color) in self.options.channel_base_colors.iter().enumerate() {
-            self.viz.borrow_mut().settings_manager_mut().settings(i).set_colors(&[color.clone()]);
+            self.viz.borrow_mut().settings_manager_mut().settings_mut(i).set_colors(&vec![color.clone()]);
         }
 
         for (source, pitch) in &self.options.manual_sample_tunings {
