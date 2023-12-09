@@ -2,6 +2,7 @@ mod snes_apu;
 mod resampler;
 mod filter;
 
+use anyhow::{Result};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
@@ -34,9 +35,8 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn from_spc<P: AsRef<Path>>(spc_path: P) -> Result<Self, String> {
-        let spc_file = Spc::load(spc_path)
-            .map_err(|e| format!("Failed to load SPC! {}", e))?;
+    pub fn from_spc<P: AsRef<Path>>(spc_path: P) -> Result<Self> {
+        let spc_file = Spc::load(spc_path)?;
         let apu = Apu::from_spc(&spc_file);
 
         Ok(Self {
@@ -59,17 +59,14 @@ impl Emulator {
         self.filter.clear();
     }
 
-    pub fn step(&mut self) -> Result<(), String> {
+    pub fn step(&mut self) -> Result<()> {
         let sample_count = if self.frame_count % 3 == 0 { 534 } else { 533 };
 
         let mut l_sample_buffer = vec![0i16; sample_count];
         let mut r_sample_buffer = vec![0i16; sample_count];
         self.apu.render(&mut l_sample_buffer, &mut r_sample_buffer, sample_count as i32);
 
-        let mut combined_sample_buffer: Vec<i16> = Vec::new();
-        for sample in self.resampler.run(&l_sample_buffer, &r_sample_buffer)? {
-            combined_sample_buffer.push(sample);
-        }
+        let mut combined_sample_buffer = self.resampler.run(&l_sample_buffer, &r_sample_buffer)?;
         if self.filter_enabled {
             self.filter.run(&mut combined_sample_buffer)?;
         }
@@ -86,11 +83,11 @@ impl Emulator {
                 if self.sample_buffer.len() < frame_size * 2 {
                     return None;
                 }
-                let result: Vec<_> = self.sample_buffer.drain(0..(frame_size * 2)).collect();
+                let result: Vec<i16> = self.sample_buffer.drain(0..(frame_size * 2)).collect();
                 Some(result)
             },
             None => {
-                let result: Vec<_> = self.sample_buffer.clone().into_iter().collect();
+                let result: Vec<i16> = self.sample_buffer.clone().into_iter().collect();
                 self.sample_buffer.clear();
                 Some(result)
             }

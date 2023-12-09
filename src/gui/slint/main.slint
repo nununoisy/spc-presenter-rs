@@ -125,6 +125,7 @@ export component MainWindow inherits Window {
 
                         Image {
                             width: 32px;
+                            height: 32px;
                             source: @image-url("spc-presenter-icon.png");
                             image-rendering: pixelated;
                         }
@@ -150,10 +151,12 @@ export component MainWindow inherits Window {
                             Text {
                                 text: "snes-apu-spcp v" + root.version;
                                 font-size: 14px;
+                                horizontal-alignment: center;
                             }
                             Text {
                                 text: "https://github.com/emu-rs/snes-apu";
-                                font-size: 12px;
+                                font-size: 10px;
+                                horizontal-alignment: center;
                             }
                         }
                     }
@@ -172,10 +175,12 @@ export component MainWindow inherits Window {
                             Text {
                                 text: "FFmpeg v" + root.ffmpeg-version;
                                 font-size: 14px;
+                                horizontal-alignment: center;
                             }
                             Text {
                                 text: "https://ffmpeg.org/";
-                                font-size: 12px;
+                                font-size: 10px;
+                                horizontal-alignment: center;
                             }
                         }
                     }

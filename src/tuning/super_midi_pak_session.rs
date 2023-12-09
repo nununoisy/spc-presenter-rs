@@ -1,3 +1,4 @@
+use anyhow::{Result, bail, Context};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
@@ -76,10 +77,10 @@ pub struct SuperMidiPakSession {
 }
 
 impl SuperMidiPakSession {
-    pub fn from_json(j: &str) -> Result<Self, String> {
-        let result: Self = serde_json::from_str(j).map_err(|e| e.to_string())?;
+    pub fn from_json(j: &str) -> Result<Self> {
+        let result: Self = serde_json::from_str(j)?;
         if result.session_type != "super_midi_pak_sample_uploader_session" {
-            return Err("Invalid session file".to_string());
+            bail!("Invalid session file");
         }
         Ok(result)
     }
@@ -88,17 +89,16 @@ impl SuperMidiPakSession {
         self.version
     }
 
-    pub fn samples(&self) -> Result<Vec<SuperMidiPakSample>, String> {
+    pub fn samples(&self) -> Result<Vec<SuperMidiPakSample>> {
         let mut result: Vec<SuperMidiPakSample> = Vec::new();
 
         for directory_entry in &self.sample_directory {
             let catalog_entry = self.sample_catalog
                 .iter()
                 .find(|&ce| ce.id.clone() == directory_entry.sample_id.clone())
-                .ok_or(format!("No catalog entry for sample '{}'", directory_entry.sample_id))?;
+                .with_context(|| format!("No catalog entry for sample '{}'", directory_entry.sample_id))?;
 
-            let brr = base64::engine::general_purpose::STANDARD_NO_PAD.decode(catalog_entry.brr.as_str())
-                .map_err(|e| e.to_string())?;
+            let brr = base64::engine::general_purpose::STANDARD_NO_PAD.decode(catalog_entry.brr.as_str())?;
 
             result.push(SuperMidiPakSample {
                 id: directory_entry.sample_id.clone(),

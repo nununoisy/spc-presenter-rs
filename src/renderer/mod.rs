@@ -1,16 +1,15 @@
 pub mod render_options;
 
+use anyhow::{Result};
 use std::cell::RefCell;
-use std::fmt::{Display, Formatter};
-use std::fs;
+use std::fmt::Display;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 use ringbuf::{HeapRb, Rb};
 use ringbuf::ring_buffer::RbBase;
-use spc::spc::Spc;
 use render_options::RendererOptions;
 use crate::config::PianoRollConfig;
-use crate::emulator::{Emulator, ResamplingMode};
+use crate::emulator::Emulator;
 use crate::renderer::render_options::StopCondition;
 use crate::video_builder;
 use crate::video_builder::VideoBuilder;
@@ -33,7 +32,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(options: RendererOptions) -> Result<Self, String> {
+    pub fn new(options: RendererOptions) -> Result<Self> {
         let emulator = Emulator::from_spc(options.input_path.clone())?;
         let viz = Rc::new(RefCell::new(Visualizer::new(8, 960, 540, 32000, PianoRollConfig::default())));
 
@@ -43,7 +42,6 @@ impl Renderer {
             video_options.metadata.insert("title".to_string(), metadata.title);
             video_options.metadata.insert("artist".to_string(), metadata.artist);
             video_options.metadata.insert("album".to_string(), metadata.game);
-            // video_options.metadata.insert("track".to_string(), format!("{}/{}", options.track_index, emulator.track_count()));
             video_options.metadata.insert("comment".to_string(), "Encoded with SPCPresenter".to_string());
         }
 
@@ -65,7 +63,7 @@ impl Renderer {
         })
     }
 
-    pub fn start_encoding(&mut self) -> Result<(), String> {
+    pub fn start_encoding(&mut self) -> Result<()> {
         self.emulator.init();
         self.emulator.set_state_receiver(Some(self.viz.clone()));
         self.emulator.set_resampling_mode(self.options.resampling_mode.clone());
@@ -89,7 +87,7 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn step(&mut self) -> Result<bool, String> {
+    pub fn step(&mut self) -> Result<bool> {
         self.emulator.step()?;
 
         self.viz.borrow_mut().draw();
@@ -138,7 +136,7 @@ impl Renderer {
         Ok(true)
     }
 
-    pub fn finish_encoding(&mut self) -> Result<(), String> {
+    pub fn finish_encoding(&mut self) -> Result<()> {
         self.vb.finish_encoding()?;
 
         Ok(())

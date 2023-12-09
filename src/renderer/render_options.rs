@@ -90,7 +90,7 @@ impl Default for RendererOptions {
                 video_time_base: (1, 60).into(),
                 video_codec: "libx264".to_string(),
                 video_codec_params: Default::default(),
-                pixel_format_in: "bgra".to_string(),
+                pixel_format_in: "rgba".to_string(),
                 pixel_format_out: "yuv420p".to_string(),
                 resolution_in: (960, 540),
                 resolution_out: (1920, 1080),

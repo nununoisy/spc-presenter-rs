@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use anyhow::{Result, Context, bail};
 use clap::{arg, Arg, ArgAction, value_parser, Command};
 use std::path::PathBuf;
 use indicatif::{FormattedDuration, HumanBytes, ProgressBar, ProgressStyle};
@@ -10,66 +10,59 @@ use tiny_skia::Color;
 use crate::renderer::{Renderer, render_options::{RendererOptions, StopCondition}};
 use crate::tuning;
 
-fn codec_option_value_parser(s: &str) -> Result<(String, String), String> {
+fn codec_option_value_parser(s: &str) -> Result<(String, String)> {
     let (key, value) = s.split_once('=')
-        .ok_or("Invalid option specification (must be of the form 'option=value').".to_string())?;
+        .context("Invalid option specification (must be of the form 'option=value').")?;
 
     Ok((key.to_string(), value.to_string()))
 }
 
-fn sample_tuning_numeric_parser(s: &str) -> Result<u8, String> {
+fn sample_tuning_numeric_parser(s: &str) -> Result<u8> {
     if s.starts_with('$') {
         u8::from_str_radix(&s[1..], 16)
-            .map_err(|e| e.to_string())
+            .with_context(|| format!("Invalid hex number {}", s))
     } else if s.starts_with("0x") || s.starts_with("0X") {
         u8::from_str_radix(&s[2..], 16)
-            .map_err(|e| e.to_string())
+            .with_context(|| format!("Invalid hex number {}", s))
     } else {
         u8::from_str(s)
-            .map_err(|e| e.to_string())
+            .with_context(|| format!("Invalid number {}", s))
     }
 }
 
-fn sample_tuning_value_parser<'a>(s: &'a str) -> Result<(u8, f64), String> {
-    const INVALID_SPEC_ERROR: &'static str = "Invalid tuning specification (must be of the form 'sample_index:type:param,param,...').";
-    const INVALID_TYPE_ERROR: &'static str = "Invalid tuning type (must be one of 'hz', 'amk')";
-
+fn sample_tuning_value_parser<'a>(s: &'a str) -> Result<(u8, f64)> {
     let mut parts = s.split(':');
 
-    let sample_index = sample_tuning_numeric_parser(parts.next().ok_or(INVALID_SPEC_ERROR.to_string())?)?;
-    let tuning_type: &'a str = parts.next().ok_or(INVALID_SPEC_ERROR.to_string())?;
-    let raw_params: &'a str = parts.next().ok_or(INVALID_SPEC_ERROR.to_string())?;
+    let sample_index = sample_tuning_numeric_parser(parts.next().context("Invalid tuning specification (must be of the form 'sample_index:type:param,param,...').")?)?;
+    let tuning_type: &'a str = parts.next().context("Invalid tuning specification (missing tuning type).")?;
+    let raw_params: &'a str = parts.next().context("Invalid tuning specification (missing tuning parameters).")?;
     if parts.next().is_some() {
-        return Err(INVALID_SPEC_ERROR.to_string());
+        bail!("Invalid tuning specification (too many options specified).");
     }
 
     let frequency = match tuning_type.to_ascii_lowercase().as_str() {
-        "hz" => {
-            f64::from_str(raw_params)
-                .map_err(|e| e.to_string())?
-        },
+        "hz" => f64::from_str(raw_params)?,
         "amk" => {
             let (raw_tuning, raw_subtuning) = raw_params.split_once(',')
-                .ok_or(INVALID_SPEC_ERROR.to_string())?;
+                .context("Invalid AddMusicK tuning parameters (must be of the form 'tuning,subtuning').")?;
 
             let tuning = sample_tuning_numeric_parser(raw_tuning)? as f64;
             let subtuning = sample_tuning_numeric_parser(raw_subtuning)? as f64;
 
             32000.0 / (16.0 * (tuning + subtuning / 256.0))
         }
-        _ => return Err(INVALID_TYPE_ERROR.to_string())
+        invalid => bail!("Invalid tuning type '{}' (must be one of 'hz', 'amk').", invalid)
     };
 
     Ok((sample_index, frequency))
 }
 
-fn sample_color_value_parser(s: &str) -> Result<(u8, Color), String> {
+fn sample_color_value_parser(s: &str) -> Result<(u8, Color)> {
     let (sample_index_str, color_str) = s.split_once(':')
-        .ok_or("Invalid color specification (must be of the form 'source_index=color').".to_string())?;
+        .with_context(|| format!("Invalid color specification '{}' (must be of the form 'source_index=color').", s))?;
 
     let sample_index = sample_tuning_numeric_parser(sample_index_str)?;
-    let parsed_color = color_str.parse::<CssColor>()
-        .map_err(|e| e.to_string())?;
+    let parsed_color = color_str.parse::<CssColor>()?;
 
     Ok((sample_index, Color::from_rgba(
         parsed_color.r as f32,

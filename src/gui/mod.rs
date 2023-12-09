@@ -212,7 +212,10 @@ pub fn run() {
         format!("${:02x}", i).into()
     });
 
-    let mut options = Rc::new(RefCell::new(RendererOptions::default()));
+    main_window.set_version(env!("CARGO_PKG_VERSION").into());
+    main_window.set_ffmpeg_version(crate::video_builder::ffmpeg_version().into());
+
+    let options = Rc::new(RefCell::new(RendererOptions::default()));
 
     let (rt_handle, rt_tx) = {
         let main_window_weak = main_window.as_weak();
@@ -222,19 +225,21 @@ pub fn run() {
                     let main_window_weak = main_window_weak.clone();
                     slint::invoke_from_event_loop(move || {
                         main_window_weak.unwrap().set_rendering(false);
+                        main_window_weak.unwrap().set_progress_indeterminate(false);
                         main_window_weak.unwrap().set_progress_error(true);
+                        main_window_weak.unwrap().set_progress_title("Idle".into());
                         main_window_weak.unwrap().set_progress_status(format!("Render error: {}", e).into());
-
                     }).unwrap();
                 }
                 RenderThreadMessage::RenderStarting => {
                     let main_window_weak = main_window_weak.clone();
                     slint::invoke_from_event_loop(move || {
                         main_window_weak.unwrap().set_rendering(true);
+                        main_window_weak.unwrap().set_progress_indeterminate(true);
                         main_window_weak.unwrap().set_progress_error(false);
                         main_window_weak.unwrap().set_progress(0.0);
-                        main_window_weak.unwrap().set_progress_title("Rendering".into());
-                        main_window_weak.unwrap().set_progress_status("Setting up".into());
+                        main_window_weak.unwrap().set_progress_title("Setting up".into());
+                        main_window_weak.unwrap().set_progress_status("Preparing your song".into());
                     }).unwrap();
                 }
                 RenderThreadMessage::RenderProgress(p) => {
@@ -250,12 +255,13 @@ pub fn run() {
                         None => "Unknown time".to_string()
                     };
 
-                    let (progress, progress_title) = match p.expected_duration_frames {
-                        Some(exp_dur_frames) => {
-                            let progress = p.frame as f64 / exp_dur_frames as f64;
+                    let (progress, progress_title) = match (p.frame, p.expected_duration_frames) {
+                        (frame, Some(exp_dur_frames)) => {
+                            let progress = frame as f64 / exp_dur_frames as f64;
                             (progress, "Rendering".to_string())
                         },
-                        None => (0.0, "Initializing".to_string()),
+                        (0, None) => (0.0, "Initializing".to_string()),
+                        (_, None) => (0.0, "Rendering to loop point".to_string()),
                     };
                     let progress_status = format!(
                         "{}%, {} FPS, encoded {}/{} ({}), {} remaining",
@@ -268,6 +274,7 @@ pub fn run() {
 
                     let main_window_weak = main_window_weak.clone();
                     slint::invoke_from_event_loop(move || {
+                        main_window_weak.unwrap().set_progress_indeterminate(p.expected_duration_frames.is_none());
                         main_window_weak.unwrap().set_progress(progress as f32);
                         main_window_weak.unwrap().set_progress_title(progress_title.into());
                         main_window_weak.unwrap().set_progress_status(progress_status.into());
@@ -277,6 +284,7 @@ pub fn run() {
                     let main_window_weak = main_window_weak.clone();
                     slint::invoke_from_event_loop(move || {
                         main_window_weak.unwrap().set_rendering(false);
+                        main_window_weak.unwrap().set_progress_indeterminate(false);
                         main_window_weak.unwrap().set_progress(1.0);
                         main_window_weak.unwrap().set_progress_title("Idle".into());
                         main_window_weak.unwrap().set_progress_status("Finished".into());
@@ -286,6 +294,7 @@ pub fn run() {
                     let main_window_weak = main_window_weak.clone();
                     slint::invoke_from_event_loop(move || {
                         main_window_weak.unwrap().set_rendering(false);
+                        main_window_weak.unwrap().set_progress_indeterminate(false);
                         main_window_weak.unwrap().set_progress_title("Idle".into());
                         main_window_weak.unwrap().set_progress_status("Render cancelled".into());
                     }).unwrap();
