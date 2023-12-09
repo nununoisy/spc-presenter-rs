@@ -6,6 +6,7 @@ use std::fmt::Write;
 use std::fs;
 use std::str::FromStr;
 use csscolorparser::Color as CssColor;
+use tiny_skia::Color;
 use crate::renderer::{Renderer, render_options::{RendererOptions, StopCondition}};
 use crate::tuning;
 
@@ -62,7 +63,7 @@ fn sample_tuning_value_parser<'a>(s: &'a str) -> Result<(u8, f64), String> {
     Ok((sample_index, frequency))
 }
 
-fn sample_color_value_parser(s: &str) -> Result<(u8, raqote::Color), String> {
+fn sample_color_value_parser(s: &str) -> Result<(u8, Color), String> {
     let (sample_index_str, color_str) = s.split_once(':')
         .ok_or("Invalid color specification (must be of the form 'source_index=color').".to_string())?;
 
@@ -70,12 +71,12 @@ fn sample_color_value_parser(s: &str) -> Result<(u8, raqote::Color), String> {
     let parsed_color = color_str.parse::<CssColor>()
         .map_err(|e| e.to_string())?;
 
-    Ok((sample_index, raqote::Color::new(
-        (parsed_color.a * 255.0) as u8,
-        (parsed_color.r * 255.0) as u8,
-        (parsed_color.g * 255.0) as u8,
-        (parsed_color.b * 255.0) as u8
-    )))
+    Ok((sample_index, Color::from_rgba(
+        parsed_color.r as f32,
+        parsed_color.g as f32,
+        parsed_color.b as f32,
+        parsed_color.a as f32
+    ).unwrap()))
 }
 
 fn get_renderer_options() -> RendererOptions {
@@ -188,7 +189,7 @@ fn get_renderer_options() -> RendererOptions {
             options.manual_sample_tunings.insert(sample_index, pitch);
         }
     }
-    if let Some(sample_colors) = matches.get_many::<(u8, raqote::Color)>("per-sample-color") {
+    if let Some(sample_colors) = matches.get_many::<(u8, Color)>("per-sample-color") {
         for (sample_index, color) in sample_colors.cloned() {
             options.per_sample_colors.insert(sample_index, color);
         }

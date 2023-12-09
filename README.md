@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="spc-presenter-icon-xl.png" alt="SPCPresenter logo" />
+    <img src="assets/spc-presenter-icon-xl.png" alt="SPCPresenter logo" />
 </p>
 
 # SPCPresenter
@@ -9,6 +9,9 @@ chiptunes, based on [snes-apu][snes-apu], [FFmpeg][ffmpeg],
 and [Slint][slint].
 The visualization design is essentially a port of the piano roll from
 [RusticNES][rusticnes].
+
+![Slint logo](assets/MadeWithSlint-logo-light.svg#gh-light-mode-only)
+![Slint logo](assets/MadeWithSlint-logo-dark.svg#gh-dark-mode-only)
 
 ## Functionality
 
@@ -35,7 +38,7 @@ video.
     - S-DSP is not yet cycle-accurate. It instead runs in 64 SMP-clock periods.
 - Automatic BRR sample analysis:
   - Rips samples from the S-DSP as the song plays, and tunes them using
-    the YIN pitch detection algorithm.
+    the pYIN pitch detection algorithm.
     - Works quite well for monophonic pitched samples and some percussion.
   - Manual tuning parameters can be specified per source index:
     - As a fundamental frequency in Hz

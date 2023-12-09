@@ -1,17 +1,13 @@
-use raqote::{AntialiasMode, BlendMode, Color, DrawOptions, PathBuilder, SolidSource, Source};
-use ringbuf::Rb;
-use crate::visualizer::ChannelState;
-use super::Visualizer;
-
-const KEY_COUNT: usize = 108;
-const KEY_THICKNESS: f32 = 5.0;
-const KEY_HEIGHT: f32 = 24.0;
+use ringbuf::{HeapRb, Rb};
+use tiny_skia::{Color, FillRule, Paint, PathBuilder, Rect, Transform};
+use super::{Visualizer, APU_STATE_BUF_SIZE, ChannelState, ChannelSettings};
 
 #[derive(Copy, Clone, PartialEq)]
 enum PianoKey {
     WhiteLeft,
     WhiteCenter,
     WhiteRight,
+    WhiteFull,
     Black
 }
 
@@ -31,216 +27,391 @@ const PIANO_KEYS: [PianoKey; 12] = [
 ];
 const C_0: f64 = 16.351597831287;
 
-impl Visualizer {
-    fn draw_piano_key(&mut self, key: PianoKey, x: f32, y: f32, w: f32, h: f32, color: Option<Color>) {
-        let key_source = match (color, key) {
-            (Some(color), _) => Source::Solid(SolidSource::from(color)),
-            (None, PianoKey::Black) => Source::Solid(SolidSource::from_unpremultiplied_argb(0xff, 0x00, 0x00, 0x00)),
-            (None, _) => Source::Solid(SolidSource::from_unpremultiplied_argb(0xff, 0x20, 0x20, 0x20))
-        };
+fn get_piano_key(index: isize, key_count: isize) -> PianoKey {
+    let result = PIANO_KEYS[index.rem_euclid(12) as usize].clone();
+    if index >= key_count - 1 && result != PianoKey::Black && result != PianoKey::WhiteRight {
+        PianoKey::WhiteFull
+    } else {
+        result
+    }
+}
 
-        let draw_options = DrawOptions {
-            blend_mode: BlendMode::SrcOver,
-            alpha: 1.0,
-            antialias: AntialiasMode::None,
-        };
+#[derive(Copy, Clone)]
+pub struct SliceState {
+    pub color: Color,
+    pub index: f32,
+    pub width: f32,
+    pub height: f32
+}
 
-        // TODO convert to path-based rendering instead
-        match key {
-            PianoKey::WhiteLeft => {
-                self.canvas.fill_rect(
-                    x - (w / 2.0) + 1.0,
-                    y + 1.0,
-                    w - 1.0,
-                    h - 1.0,
-                    &key_source,
-                    &draw_options
-                );
-                self.canvas.fill_rect(
-                    x + (w / 2.0),
-                    y + (h / 2.0) + 1.0,
-                    w / 2.0,
-                    (h / 2.0) - 1.0,
-                    &key_source,
-                    &draw_options
-                );
-            },
-            PianoKey::WhiteCenter => {
-                self.canvas.fill_rect(
-                    x - (w / 2.0) + 1.0,
-                    y + 1.0,
-                    w - 1.0,
-                    h / 2.0,
-                    &key_source,
-                    &draw_options
-                );
-                self.canvas.fill_rect(
-                    x - w + 1.0,
-                    y + (h / 2.0) + 1.0,
-                    (w * 2.0) - 1.0,
-                    (h / 2.0) - 1.0,
-                    &key_source,
-                    &draw_options
-                );
-            },
-            PianoKey::WhiteRight => {
-                self.canvas.fill_rect(
-                    x - (w / 2.0) + 1.0,
-                    y + 1.0,
-                    w - 1.0,
-                    h - 1.0,
-                    &key_source,
-                    &draw_options
-                );
-                self.canvas.fill_rect(
-                    x - w + 1.0,
-                    y + (h / 2.0) + 1.0,
-                    w / 2.0,
-                    (h / 2.0) - 1.0,
-                    &key_source,
-                    &draw_options
-                );
-            },
-            PianoKey::Black => {
-                self.canvas.fill_rect(
-                    x - (w / 2.0),
-                    y + 1.0,
-                    w + 1.0,
-                    h / 2.0,
-                    &key_source,
-                    &draw_options
-                );
-            }
+pub struct PianoRollState {
+    pub slices: HeapRb<SliceState>,
+    samples_per_frame: f32,
+    taken_samples: f32,
+    starting_octave: f32
+}
+
+impl PianoRollState {
+    pub fn new(sample_rate: f32, scroll_speed: f32, starting_octave: f32) -> Self {
+        Self {
+            slices: HeapRb::new(APU_STATE_BUF_SIZE),
+            samples_per_frame: sample_rate / (60.0 * scroll_speed),
+            taken_samples: 0.0,
+            starting_octave
         }
     }
 
-    fn draw_piano_keys(&mut self, x: f32, y: f32, w: f32, h: f32, key_w: f32) {
-        let white_border_source = Source::Solid(SolidSource::from_unpremultiplied_argb(0xff, 0x18, 0x18, 0x18));
-        let top_edge_source = Source::Solid(SolidSource::from_unpremultiplied_argb(0xff, 0x04, 0x04, 0x04));
-
-        let keys_w = key_w * KEY_COUNT as f32;
-        let keys_x = x + ((w - keys_w) / 2.0);
-
-        self.canvas.fill_rect(x, y, w, h + 1.0, &top_edge_source, &DrawOptions::default());
-        self.canvas.fill_rect(keys_x, y, keys_w, h, &white_border_source, &DrawOptions::default());
-        for key_i in 0..KEY_COUNT {
-            let key_t = PIANO_KEYS[key_i % 12].clone();
-            let key_x = keys_x + key_w * key_i as f32;
-
-            self.draw_piano_key(key_t, key_x, y, key_w, h, None);
-        }
-        self.canvas.fill_rect(x, y, w, 1.0, &top_edge_source, &DrawOptions::default());
-    }
-
-    fn draw_channel_key_spot(&mut self, channel: usize, x: f32, y: f32, w: f32, h: f32, key_w: f32) {
-        let last_state = self.channel_states.get(channel).unwrap().iter().last();
-        if last_state.is_none() {
+    pub fn consume(&mut self, state: &ChannelState, settings: &ChannelSettings) {
+        self.taken_samples += 1.0;
+        if self.taken_samples < self.samples_per_frame {
             return;
         }
-        let last_state = last_state.unwrap();
+        self.taken_samples -= self.samples_per_frame;
 
-        let settings = self.settings.settings(channel);
-        let color = settings.color(&last_state).unwrap();
-        let volume_alpha = match last_state.volume {
-            0 => return,
-            v => 0.5 + (v as f32) / 30.0
+        let n = 12.0 * (state.frequency / C_0).log2() as f32;
+        let octave = (n / 12.0).floor() + self.starting_octave;
+        let note = n.rem_euclid(12.0);
+
+        let color = settings.color(state).unwrap();
+        let index = note + 12.0 * octave;
+        let width = state.volume;
+
+        debug_assert!(!index.is_nan(), "Piano key index is NaN?!");
+
+        if let Some(last_slice) = self.slices.iter_mut().last() {
+            if last_slice.width == width && ((last_slice.color == color && last_slice.index == index) || width == 0.0) {
+                last_slice.height += 1.0;
+                return;
+            }
+        }
+
+        self.slices.push_overwrite(SliceState {
+            color,
+            index,
+            width,
+            height: 1.0
+        });
+    }
+}
+
+impl Visualizer {
+    fn draw_piano_key(&mut self, key: PianoKey, pos: Rect, color: Option<Color>) {
+        let key_color = match (color, key) {
+            (Some(color), _) => color,
+            (None, PianoKey::Black) => Color::BLACK,
+            (None, _) => Color::from_rgba8(0x20, 0x20, 0x20, 0xFF)
         };
+        let mut key_paint = Paint::default();
+        key_paint.anti_alias = false;
+        key_paint.set_color(key_color);
+
+        let x = pos.x();
+        let y = pos.y();
+        let w = pos.width();
+        let h = pos.height();
+        let w2 = pos.width() / 2.0;
+        let h2 = pos.height() / 2.0;
+
+        let mut pb = PathBuilder::new();
+        match key {
+            PianoKey::WhiteLeft => {
+                pb.push_rect(Rect::from_xywh(
+                    x - w2 + 1.0,
+                    y + 1.0,
+                    w - 1.0,
+                    h - 1.0
+                ).unwrap());
+                pb.push_rect(Rect::from_xywh(
+                    x + w2,
+                    y + h2 + 1.0,
+                    w2,
+                    h2 - 1.0
+                ).unwrap());
+            },
+            PianoKey::WhiteCenter => {
+                pb.push_rect(Rect::from_xywh(
+                    x - w2 + 1.0,
+                    y + 1.0,
+                    w - 1.0,
+                    h2
+                ).unwrap());
+                pb.push_rect(Rect::from_xywh(
+                    x - w + 1.0,
+                    y + h2 + 1.0,
+                    (2.0 * w) - 1.0,
+                    h2 - 1.0
+                ).unwrap());
+            },
+            PianoKey::WhiteRight => {
+                pb.push_rect(Rect::from_xywh(
+                    x - w2 + 1.0,
+                    y + 1.0,
+                    w - 1.0,
+                    h - 1.0
+                ).unwrap());
+                pb.push_rect(Rect::from_xywh(
+                    x - w + 1.0,
+                    y + h2 + 1.0,
+                    w2,
+                    h2 - 1.0
+                ).unwrap());
+            },
+            PianoKey::WhiteFull => {
+                pb.push_rect(Rect::from_xywh(
+                    x - w2 + 1.0,
+                    y + 1.0,
+                    w + w2 - 1.0,
+                    h - 1.0
+                ).unwrap());
+            },
+            PianoKey::Black => {
+                pb.push_rect(Rect::from_xywh(
+                    x - w2,
+                    y + 1.0,
+                    w + 1.0,
+                    h2
+                ).unwrap());
+            }
+        }
+        let path = pb.finish().unwrap();
+
+        self.canvas.fill_path(
+            &path,
+            &key_paint,
+            FillRule::Winding,
+            Transform::identity(),
+            None
+        );
+    }
+
+    fn draw_piano_strings(&mut self, pos: Rect) {
+        let mut white_string_paint = Paint::default();
+        white_string_paint.anti_alias = false;
+        white_string_paint.set_color_rgba8(0x0C, 0x0C, 0x0C, 0xFF);
+
+        let mut black_string_paint = Paint::default();
+        black_string_paint.anti_alias = false;
+        black_string_paint.set_color_rgba8(0x06, 0x06, 0x06, 0xFF);
+
+        let key_count = 12 * self.config.octave_count as isize + 1;
+        let keys_w = self.config.key_thickness * key_count as f32;
+        let keys_x = pos.x() + ((pos.width() - keys_w) / 2.0) + (self.config.key_thickness / 2.0) - 1.0;
+
+        for key_i in 0..key_count {
+            let string_pos = Rect::from_xywh(
+                keys_x + self.config.key_thickness * key_i as f32,
+                pos.y(),
+                1.0,
+                pos.height()
+            ).unwrap();
+
+            match get_piano_key(key_i, key_count) {
+                PianoKey::Black => self.canvas.fill_rect(
+                    string_pos,
+                    &black_string_paint,
+                    Transform::identity(),
+                    None
+                ),
+                _ => self.canvas.fill_rect(
+                    string_pos,
+                    &white_string_paint,
+                    Transform::identity(),
+                    None
+                )
+            };
+        }
+    }
+
+    fn draw_piano_keys(&mut self, pos: Rect) {
+        let key_count = 12 * self.config.octave_count as isize + 1;
+
+        let keys_w = self.config.key_thickness * key_count as f32;
+        let keys_x = pos.x() + ((pos.width() - keys_w) / 2.0) + (self.config.key_thickness / 2.0) - 1.0;
+
+        let mut white_border_paint = Paint::default();
+        white_border_paint.anti_alias = false;
+        white_border_paint.set_color_rgba8(0x18, 0x18, 0x18, 0xFF);
+
+        let mut top_edge_paint = Paint::default();
+        top_edge_paint.anti_alias = false;
+        top_edge_paint.set_color_rgba8(0x04, 0x04, 0x04, 0xFF);
+
+        self.canvas.fill_rect(
+            Rect::from_xywh(pos.x(), pos.y(), pos.width(), pos.height() + 1.0).unwrap(),
+            &top_edge_paint,
+            Transform::identity(),
+            None
+        );
+        self.canvas.fill_rect(
+            Rect::from_xywh(keys_x, pos.y(), keys_w, pos.height()).unwrap(),
+            &white_border_paint,
+            Transform::identity(),
+            None
+        );
+
+        for key_i in 0..key_count {
+            let key_t = get_piano_key(key_i, key_count);
+            let key_pos = Rect::from_xywh(
+                keys_x + self.config.key_thickness * key_i as f32,
+                pos.y(),
+                self.config.key_thickness,
+                pos.height()
+            ).unwrap();
+
+            self.draw_piano_key(key_t, key_pos, None);
+        }
+
+        self.canvas.fill_rect(
+            Rect::from_xywh(pos.x(), pos.y(), pos.width(), 1.0).unwrap(),
+            &top_edge_paint,
+            Transform::identity(),
+            None
+        );
+    }
+
+    fn draw_channel_key_spot(&mut self, channel: usize, pos: Rect) {
+        let key_count = 12 * self.config.octave_count as isize + 1;
+
+        let settings = self.config.settings.settings(channel).unwrap();
+        let last_state = self.channel_last_states[channel];
+
+        let color = settings.color(&last_state).unwrap();
+        if settings.hidden() || last_state.volume <= 0.0 {
+            return;
+        }
+        let volume_alpha = (0.5 + last_state.volume / 30.0).clamp(0.0, 1.0);
 
         let n = 12.0 * (last_state.frequency / C_0).log2() as f32;
-        let octave = (n / 12.0).floor();
+        let octave = (n / 12.0).floor() + self.config.starting_octave as f32;
         let note = n.rem_euclid(12.0);
+
+        let lower_alpha_multiplier = if note.ceil() != note.floor() {
+            note.ceil() - note
+        } else {
+            1.0
+        }.clamp(0.0, 1.0);
+
+        let upper_alpha_multiplier = if note.ceil() != note.floor() {
+            note - note.floor()
+        } else {
+            0.0
+        }.clamp(0.0, 1.0);
 
         let lower_note = note.floor();
         let lower_octave = octave;
-        let lower_key = PIANO_KEYS[lower_note as usize].clone();
-        let lower_alpha = (255.0 * volume_alpha * (note.ceil() - note)) as u8;
-        let lower_color = Color::new(lower_alpha, color.r(), color.g(), color.b());
+        let lower_key = get_piano_key((lower_note + 12.0 * lower_octave) as isize, key_count);
+        let lower_alpha = volume_alpha * lower_alpha_multiplier;
+        let lower_color = Color::from_rgba(color.red(), color.green(), color.blue(), lower_alpha).unwrap();
 
         let upper_note = note.ceil().rem_euclid(12.0);
         let upper_octave = octave + (note.ceil() / 12.0).floor();
-        let upper_key = PIANO_KEYS[upper_note as usize].clone();
-        let upper_alpha = (255.0 * volume_alpha * (note - note.floor())) as u8;
-        let upper_color = Color::new(upper_alpha, color.r(), color.g(), color.b());
+        let upper_key = get_piano_key((upper_note + 12.0 * upper_octave) as isize, key_count);
+        let upper_alpha = volume_alpha * upper_alpha_multiplier;
+        let upper_color = Color::from_rgba(color.red(), color.green(), color.blue(), upper_alpha).unwrap();
 
-        let keys_w = key_w * KEY_COUNT as f32;
-        let keys_x = x + (w / 2.0) - (keys_w / 2.0);
+        let keys_w = self.config.key_thickness * key_count as f32;
+        let keys_x = pos.x() + ((pos.width() - keys_w) / 2.0) + (self.config.key_thickness / 2.0) - 1.0;
 
-        let lower_x = keys_x + key_w * (lower_note + 12.0 * lower_octave);
-        let upper_x = keys_x + key_w * (upper_note + 12.0 * upper_octave);
+        let lower_pos = Rect::from_xywh(
+            keys_x + self.config.key_thickness * (lower_note + 12.0 * lower_octave),
+            pos.y(),
+            self.config.key_thickness,
+            pos.height()
+        ).unwrap();
+        let upper_pos = Rect::from_xywh(
+            keys_x + self.config.key_thickness * (upper_note + 12.0 * upper_octave),
+            pos.y(),
+            self.config.key_thickness,
+            pos.height()
+        ).unwrap();
 
-        self.draw_piano_key(lower_key, lower_x, y, key_w, h, Some(lower_color));
-        self.draw_piano_key(upper_key, upper_x, y, key_w, h, Some(upper_color));
+        self.draw_piano_key(lower_key, lower_pos, Some(lower_color));
+        self.draw_piano_key(upper_key, upper_pos, Some(upper_color));
     }
 
-    fn draw_channel_slices(&mut self, x: f32, y: f32, w: f32, h: f32, key_w: f32, outline: bool) {
-        let keys_w = key_w * KEY_COUNT as f32;
-        let keys_x = x + (w / 2.0) - (keys_w / 2.0);
+    fn draw_channel_slices(&mut self, pos: Rect, outline: bool) {
+        let key_count = 12 * self.config.octave_count as usize + 1;
 
-        for (i, state) in self.state_slices.iter().rev().enumerate() {
-            if (i / 8) > h.floor() as usize {
-                break;
-            }
-            if state.volume == 0 {
+        let keys_w = self.config.key_thickness * key_count as f32;
+        let keys_x = pos.x() + ((pos.width() - keys_w) / 2.0) + (self.config.key_thickness / 2.0) - 1.0;
+
+        for channel in 0..self.channels {
+            if self.config.settings.settings(channel).unwrap().hidden() {
                 continue;
             }
 
-            let settings = self.settings.settings(state.channel);
-            let color = settings.color(&state).unwrap();
+            let mut y = pos.y();
+            for slice in self.piano_roll_states[channel].slices.iter().rev() {
+                if slice.width > 0.0 {
+                    let slice_pos: Rect;
+                    let mut slice_color: Color;
 
-            let frequency = state.frequency;
-            let n = 12.0 * (frequency / C_0).log2() as f32;
-            let octave = (n / 12.0).floor();
-            let note = n.rem_euclid(12.0);
+                    if outline {
+                        slice_pos = Rect::from_xywh(
+                            keys_x + (self.config.key_thickness * slice.index) - (slice.width / 2.0) - (self.config.key_thickness / 2.0),
+                            y - (self.config.key_thickness / 2.0),
+                            slice.width + self.config.key_thickness,
+                            slice.height + self.config.key_thickness
+                        ).unwrap();
+                        slice_color = self.config.outline_color;
+                    } else {
+                        slice_pos = Rect::from_xywh(
+                            keys_x + (self.config.key_thickness * slice.index) - (slice.width / 2.0),
+                            y,
+                            slice.width,
+                            slice.height
+                        ).unwrap();
+                        slice_color = slice.color;
+                    }
 
-            let slice_w = state.volume as f32;
-            let slice_x = keys_x + (key_w * (note + 12.0 * octave)) - (slice_w / 2.0);
-            let slice_y = y + (i / 8) as f32;
+                    let mut slice_paint = Paint::default();
+                    slice_paint.anti_alias = slice.width > 1.0;
+                    if slice.width < 1.0 {
+                        slice_color.set_alpha(slice.width);
+                    }
+                    slice_paint.set_color(slice_color);
 
-            if outline {
-                self.canvas.fill_rect(
-                    slice_x - (KEY_THICKNESS / 2.0),
-                    slice_y - 1.0,
-                    slice_w + KEY_THICKNESS,
-                    3.0,
-                    &Source::from(Color::new(0xFF, 0, 0, 0)),
-                    &DrawOptions::default()
-                );
-            } else {
-                self.canvas.fill_rect(
-                    slice_x,
-                    slice_y,
-                    slice_w,
-                    1.0,
-                    &Source::Solid(SolidSource::from(color)),
-                    &DrawOptions::default()
-                );
+                    self.canvas.fill_rect(
+                        slice_pos,
+                        &slice_paint,
+                        Transform::identity(),
+                        None
+                    );
+                }
+
+                y += slice.height;
+                if y >= pos.bottom() {
+                    break;
+                }
             }
         }
     }
 
-    pub fn draw_piano_roll(&mut self) {
-        let slices_y = 48.0 + KEY_HEIGHT;
-        let slices_h = 540.0 - slices_y;
-
-        let mut state_slices: Vec<ChannelState> = Vec::new();
-        for channel in 0..8 {
-            if let Some(last_state) = self.channel_states.get(channel).unwrap().iter().last() {
-                state_slices.push(last_state.clone());
-            }
+    pub fn draw_piano_roll(&mut self, pos: Rect) {
+        let key_length = self.config.key_length;
+        
+        let slices_pos = Rect::from_xywh(
+            pos.x(),
+            pos.y() + key_length,
+            pos.width(),
+            pos.height() - key_length
+        ).unwrap();
+        self.draw_channel_slices(slices_pos, true);
+        if self.config.draw_piano_strings {
+            self.draw_piano_strings(slices_pos);
         }
-        state_slices.sort_unstable_by_key(|state| state.kon_frames);
+        self.draw_channel_slices(slices_pos, false);
 
-        for _ in 0..4 {
-            for last_state in &state_slices {
-                self.state_slices.push_overwrite(last_state.clone());
-            }
-        }
-        self.draw_channel_slices(0.0, slices_y, 960.0, slices_h, KEY_THICKNESS, true);
-        self.draw_channel_slices(0.0, slices_y, 960.0, slices_h, KEY_THICKNESS, false);
+        let piano_keys_pos = Rect::from_xywh(
+            pos.x(),
+            pos.y(),
+            pos.width(),
+            key_length
+        ).unwrap();
 
-        self.draw_piano_keys(0.0, 48.0, 960.0, KEY_HEIGHT, KEY_THICKNESS);
-        for channel in 0..8 {
-            self.draw_channel_key_spot(channel, 0.0, 48.0, 960.0, KEY_HEIGHT, KEY_THICKNESS);
+        self.draw_piano_keys(piano_keys_pos);
+        for channel in 0..self.channels {
+            self.draw_channel_key_spot(channel, piano_keys_pos);
         }
     }
 }

@@ -27,7 +27,7 @@ impl Timer {
         while self.ticks > self.resolution {
             self.ticks -= self.resolution;
 
-            self.counter_low += 1;
+            self.counter_low = self.counter_low.wrapping_add(1);
             if let Some(target) = self.target {
                 if self.counter_low == target {
                     self.counter_high += 1;

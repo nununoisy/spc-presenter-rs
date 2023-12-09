@@ -1,10 +1,8 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use pitch_detection::detector::PitchDetector;
-use pitch_detection::detector::yin::YINDetector;
 use crate::emulator::ApuStateReceiver;
-use crate::emulator::snes_apu::dsp::brr_block_decoder::BrrBlockDecoder;
+use crate::emulator::snes_apu::dsp::pitch_detection::VoicePitch;
 use super::super::apu::Apu;
 use super::voice::{Voice, ResamplingMode};
 use super::filter::Filter;
@@ -40,7 +38,7 @@ pub struct Dsp {
     vol_right: u8,
     echo_vol_left: u8,
     echo_vol_right: u8,
-    noise_clock: u8,
+    pub(super) noise_clock: u8,
     echo_write_enabled: bool,
     echo_feedback: u8,
     source_dir: u8,
@@ -60,7 +58,7 @@ pub struct Dsp {
     resampling_mode: ResamplingMode,
 
     pub state_receiver: Option<Rc<RefCell<dyn ApuStateReceiver>>>,
-    pub source_pitches: HashMap<u8, f64>
+    pub source_pitches: HashMap<u8, VoicePitch>
 }
 
 impl Dsp {
@@ -118,7 +116,7 @@ impl Dsp {
     }
 
     #[inline]
-    fn emulator(&self) -> &mut Apu {
+    pub(super) fn emulator(&self) -> &mut Apu {
         unsafe {
             &mut (*self.emulator)
         }
@@ -245,7 +243,7 @@ impl Dsp {
             if self.state_receiver.is_some() {
                 for channel in 0..NUM_VOICES {
                     // Need to do this first to avoid double mutable borrow
-                    let source_pitch = self.detect_voice_pitch(channel);
+                    let (source_pitch, source_loudness) = self.detect_voice_pitch(channel);
 
                     let voice = self.voices.get_mut(channel).unwrap();
 
@@ -253,9 +251,7 @@ impl Dsp {
                         if voice.is_muted {
                             0u8
                         } else {
-                            // (2.25 * (((voice.vol_left / 2) + (voice.vol_right / 2)) as f64 + 1.0).log2() * (voice.envelope.level as f64 / 2047.0)).ceil() as u8
-                            // (4.0 * (((voice.vol_left as f64 / 2.0) + (voice.vol_right as f64 / 2.0)).abs() / 8.0 + 1.0).log2() * (voice.envelope.level as f64 / 2047.0)).round() as u8
-                            (2.8 * (((voice.vol_left as f64 / 2.0) + (voice.vol_right as f64 / 2.0)).abs() / 3.0 + 1.0).log2() * (voice.envelope.level as f64 / 2047.0)).ceil() as u8
+                            (source_loudness * 2.8 * (((voice.vol_left as f64 / 2.0) + (voice.vol_right as f64 / 2.0)).abs() / 3.0 + 1.0).log2() * (voice.envelope.level as f64 / 2047.0)).ceil() as u8
                         }
                     };
                     let timbre = voice.source as usize;
@@ -277,7 +273,7 @@ impl Dsp {
                     let frequency = match voice.noise_on {
                         true => source_pitch,
                         false => source_pitch * (voice.pitch() as f64) / (0x1000 as f64)
-                    };
+                    }.max(f64::EPSILON);
                     let kon_frames = voice.get_sample_frame();
 
                     self.state_receiver.clone().unwrap().borrow_mut().receive(channel, volume, amplitude, frequency, timbre, balance, edge, kon_frames);
@@ -501,91 +497,5 @@ impl Dsp {
             }
         }
         result
-    }
-
-    fn detect_voice_pitch(&mut self, channel: usize) -> f64 {
-        if self.voices[channel].noise_on {
-            const C_0: f64 = 16.351597831287;
-
-            return C_0 * (2.0_f64).powf((self.noise_clock as f64) / 12.0);
-        }
-
-        let source = self.voices[channel].source;
-
-        if let Some(pitch) = self.source_pitches.get(&source) {
-            return *pitch;
-        }
-
-        let mut decoded_sample: Vec<f64> = Vec::new();
-        let mut sample_address = self.read_source_dir_start_address(source as i32);
-        let loop_address = self.read_source_dir_loop_address(source as i32);
-
-        let mut brr_block_decoder = BrrBlockDecoder::new();
-        let mut loop_count = 0;
-        let mut start_block_count = 0;
-        let mut loop_block_count = 0;
-
-        brr_block_decoder.reset(0, 0);
-
-        loop {
-            let mut buf = [0; 9];
-            for i in 0..9 {
-                buf[i] = self.emulator().read_u8(sample_address + i as u32);
-            }
-            brr_block_decoder.read(&buf);
-            sample_address += 9;
-
-            match loop_count {
-                0 => start_block_count += 1,
-                1 => loop_block_count += 1,
-                _ => ()
-            };
-
-            while !brr_block_decoder.is_finished() {
-                decoded_sample.push(brr_block_decoder.read_next_sample() as f64);
-            }
-
-            if brr_block_decoder.is_end {
-                // Loop for 5 seconds
-                if brr_block_decoder.is_looping && decoded_sample.len() < (10 * 32000) {
-                    sample_address = loop_address;
-                    loop_count += 1;
-                } else {
-                    break;
-                }
-            }
-        }
-
-        let mut detector = YINDetector::new(decoded_sample.len(), decoded_sample.len() / 2);
-        let (pitch, confidence) = match detector.get_pitch(&decoded_sample, 32000, 6.0, 0.5) {
-            Some(pitch) => {
-                let mut frequency = pitch.frequency;
-                // Samples probably aren't going to have a fundamental period longer than 16 BRR blocks (256 sample points, 125 Hz),
-                // so we can use this way-too-simple heuristic to detect pitch predictions that are too low.
-                // This is entirely arbitrary - it just so happens to make a lot of visualizations look better.
-                while frequency < 125.0 {
-                    frequency *= 2.0;
-                }
-                (frequency, pitch.clarity)
-            },
-            None => {
-                let mut period_blocks = match loop_block_count {
-                    0 => start_block_count,
-                    _ => loop_block_count
-                }.max(1);
-
-                while period_blocks > 16 {
-                    period_blocks /= 2;
-                }
-
-                println!("WARNING: YIN failure! Assuming period is {} BRR blocks", period_blocks);
-
-                (32000.0 / (period_blocks * 16) as f64, 0.0)
-            }
-        };
-
-        self.source_pitches.insert(source, pitch);
-        println!("Detected new source ${:x}, f0={} Hz, clarity={}, length={}:{}\n\n\n", source, pitch, confidence, start_block_count, loop_block_count);
-        pitch
     }
 }

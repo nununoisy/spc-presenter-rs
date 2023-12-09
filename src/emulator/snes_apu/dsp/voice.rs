@@ -1,8 +1,8 @@
+use crate::emulator::snes_apu::dsp::brr_stream_decoder::BrrStreamDecoder;
 use crate::emulator::snes_apu::dsp::gaussian::construct_accurate_gaussian_table;
 use super::dsp::Dsp;
 use super::super::apu::Apu;
 use super::envelope::Envelope;
-use super::brr_block_decoder::BrrBlockDecoder;
 use super::dsp_helpers;
 use super::gaussian::{HALF_KERNEL_SIZE, HALF_KERNEL};
 
@@ -74,9 +74,11 @@ pub struct Voice {
 
     sample_start_address: u32,
     loop_start_address: u32,
-    brr_block_decoder: BrrBlockDecoder,
+    brr_decoder: BrrStreamDecoder,
     sample_address: u32,
+    sample_offset: u32,
     sample_pos: i32,
+    pub(super) sample_block_index: usize,
 
     pub(crate) edge_hit: bool,
     pub(crate) sample_frame: usize,
@@ -114,9 +116,11 @@ impl Voice {
 
             sample_start_address: 0,
             loop_start_address: 0,
-            brr_block_decoder: BrrBlockDecoder::new(),
+            brr_decoder: BrrStreamDecoder::new(),
             sample_address: 0,
+            sample_offset: 0,
             sample_pos: 0,
+            sample_block_index: 0,
 
             edge_hit: false,
             sample_frame: 0,
@@ -157,7 +161,12 @@ impl Voice {
         }
         pitch = ((pitch as u32) & 0x7fff) as i32;
 
-        self.kon_delay = self.kon_delay.saturating_sub(1);
+        if self.kon_delay > 0 {
+            self.envelope.kon_delay_tick();
+
+            self.sample_pos = 0;
+            self.kon_delay -= 1;
+        };
 
         let mut sample = if !self.noise_on {
             let base_pos = match self.resampling_mode {
@@ -208,7 +217,7 @@ impl Voice {
         sample = ((sample * env_level) >> 11) & !1;
         self.outx_value = ((sample >> 8) as i8) as u8;
 
-        if self.brr_block_decoder.is_end && !self.brr_block_decoder.is_looping {
+        if self.kon_delay < 5 && self.brr_decoder.is_end && !self.brr_decoder.is_looping {
             self.envelope.key_off();
             self.envelope.level = 0;
         }
@@ -226,9 +235,9 @@ impl Voice {
             self.sample_pos -= 0x1000;
             self.read_next_sample();
 
-            if self.brr_block_decoder.is_finished() {
-                if !self.envelope.skip_brr() && self.kon_delay <= 3 {
-                    if self.brr_block_decoder.is_end && self.brr_block_decoder.is_looping {
+            if self.brr_decoder.is_finished() {
+                if self.kon_delay <= 3 {
+                    if self.brr_decoder.is_end && self.brr_decoder.is_looping {
                         self.edge_hit = true;
                         self.read_entry();
                         if self.kon_delay == 0 {
@@ -236,10 +245,14 @@ impl Voice {
                         } else {
                             self.sample_address = self.sample_start_address;
                         }
+                    } else {
+                        self.sample_address += 9;
                     }
                     self.read_next_block();
+                    self.sample_block_index += 1;
                 } else {
-                    self.brr_block_decoder.restart();
+                    self.brr_decoder.restart();
+                    self.sample_offset = 0;
                 }
             }
         }
@@ -276,8 +289,9 @@ impl Voice {
     pub fn key_on(&mut self) {
         self.read_entry();
         self.sample_address = self.sample_start_address;
-        self.brr_block_decoder.reset(0, 0);
+        // self.brr_decoder.reset(0, 0);
         self.read_next_block();
+        self.sample_block_index = 0;
         self.sample_pos = 0;
         for i in 0..RESAMPLE_BUFFER_LEN {
             self.resample_buffer[i] = 0;
@@ -302,25 +316,32 @@ impl Voice {
     }
 
     fn read_next_block(&mut self) {
-        if self.brr_block_decoder.is_end {
-            self.endx_bit = true;
+        // println!("Read BRR block header: ${:04x}", self.sample_address);
+        self.brr_decoder.read_header(self.emulator().read_u8(self.sample_address));
+        self.sample_offset = 0;
+
+        if self.brr_decoder.is_end {
             self.endx_latch = true;
         }
-
-        let mut buf = [0; 9];
-        for i in 0..9 {
-            buf[i] = self.emulator().read_u8(self.sample_address + (i as u32));
-        }
-        self.brr_block_decoder.read(&buf);
-        self.sample_address += 9;
     }
 
     fn read_next_sample(&mut self) {
+        if self.brr_decoder.needs_more_samples() {
+            assert!(self.sample_offset < 7, "OOB sample access: offset={}", self.sample_offset);
+            let buf = vec![
+                self.emulator().read_u8(self.sample_address + self.sample_offset + 1),
+                self.emulator().read_u8(self.sample_address + self.sample_offset + 2)
+            ];
+            self.sample_offset += 2;
+
+            self.brr_decoder.read(&buf);
+        }
+
         self.resample_buffer_pos = match self.resample_buffer_pos {
             0 => RESAMPLE_BUFFER_LEN - 1,
             x => x - 1
         };
-        self.resample_buffer[self.resample_buffer_pos] = self.brr_block_decoder.read_next_sample() as i32;
+        self.resample_buffer[self.resample_buffer_pos] = self.brr_decoder.read_next_sample() as i32;
     }
 
     pub fn pitch(&self) -> u16 {

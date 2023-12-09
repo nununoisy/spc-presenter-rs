@@ -1,4 +1,4 @@
-import { VerticalBox, Button, StandardButton, SpinBox, CheckBox, LineEdit, ComboBox } from "std-widgets.slint";
+import { AboutSlint, VerticalBox, Button, StandardButton, SpinBox, CheckBox, LineEdit, ComboBox } from "std-widgets.slint";
 import { PitchType, SampleConfig, SampleUtils, SampleConfigWidget } from "./sample-config.slint";
 export { PitchType, SampleConfig, SampleUtils }
 import { ColorUtils, ColorPickerButton } from "./color-picker.slint";
@@ -58,11 +58,17 @@ export component MainWindow inherits Window {
     callback add-sample(int) -> int;
     callback remove-sample(int) -> int;
 
+    in property <string> version: "?";
+    in property <string> ffmpeg-version: "?";
+
     in property <bool> rendering;
     in property <float> progress: 0.0;
     in property <string> progress-title: "Idle";
     in property <string> progress-status: "";
     in property <bool> progress-error: false;
+    in property <bool> progress-indeterminate: false;
+
+    property<float> i-progress-anim-tick: -cos(180deg * mod(animation-tick() / 1.3s, 2) / 2) + 1;
 
     in property <[string]> metadata-lines: ["<no metadata>"];
     in-out property <[[int]]> channel-base-colors: [
@@ -91,6 +97,101 @@ export component MainWindow inherits Window {
 
     title: "SPCPresenter";
     icon: @image-url("spc-presenter-icon.png");
+
+    Rectangle {
+        Button {
+            icon: @image-url("info.svg");
+            x: parent.width - self.width - 8px;
+            y: 16px;
+            clicked => {
+                i-about-popup.show()
+            }
+        }
+        i-about-popup := PopupWindow {
+            x: parent.width - 308px;
+            y: 16px;
+            width: 300px;
+            height: 300px;
+
+            Rectangle {
+                background: #1c1c1c;
+                border-radius: 2px;
+
+                VerticalBox {
+                    alignment: start;
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 8px;
+
+                        Image {
+                            width: 32px;
+                            source: @image-url("spc-presenter-icon.png");
+                            image-rendering: pixelated;
+                        }
+                        Text {
+                            text: "SPCPresenter v" + root.version;
+                            font-size: 24px;
+                            vertical-alignment: center;
+                        }
+                    }
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 8px;
+
+                        Image {
+                            width: 32px;
+                            height: 32px;
+                            source: @image-url("snes-apu-spcp-icon.png");
+                            image-rendering: pixelated;
+                        }
+                        VerticalLayout {
+                            alignment: center;
+
+                            Text {
+                                text: "snes-apu-spcp v" + root.version;
+                                font-size: 14px;
+                            }
+                            Text {
+                                text: "https://github.com/emu-rs/snes-apu";
+                                font-size: 12px;
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 8px;
+
+                        Image {
+                            width: 32px;
+                            height: 32px;
+                            source: @image-url("ffmpeg-icon.png");
+                        }
+                        VerticalLayout {
+                            alignment: center;
+
+                            Text {
+                                text: "FFmpeg v" + root.ffmpeg-version;
+                                font-size: 14px;
+                            }
+                            Text {
+                                text: "https://ffmpeg.org/";
+                                font-size: 12px;
+                            }
+                        }
+                    }
+
+                    AboutSlint {
+                        preferred-height: 100px;
+                    }
+                    HorizontalLayout {
+                        alignment: center;
+
+                        Button { text: "Close"; }
+                    }
+                }
+            }
+        }
+    }
 
     VerticalBox {
         alignment: start;
@@ -300,13 +401,12 @@ export component MainWindow inherits Window {
             }
             Rectangle {
                 height: 6px;
+                clip: true;
 
-                border-width: 1px;
                 border-radius: 3px;
-                border-color: #313131;  // Palette.neutralLighter
                 background: #313131;  // Palette.neutralLighter
 
-                Rectangle {
+                if !root.progress-indeterminate: Rectangle {
                     x: 0;
                     y: 0;
                     height: parent.height;
@@ -321,6 +421,28 @@ export component MainWindow inherits Window {
                         duration: 100ms;
                         easing: ease-in-out;
                     }
+                }
+                if root.progress-indeterminate: Rectangle {
+                    x: (4 * (root.i-progress-anim-tick / 1.4) - 1) * parent.width;
+                    y: 0;
+                    height: parent.height;
+                    width: 0.5 * parent.width;
+
+                    border-width: 1px;
+                    border-radius: 3px;
+                    border-color: root.i-progress-anim-tick > 1.4 ? transparent : #60cdff;  // Palette.themePrimary
+                    background: root.i-progress-anim-tick > 1.4 ? transparent : #60cdff;  // Palette.themePrimary
+                }
+                if root.progress-indeterminate: Rectangle {
+                    x: (3.1666 * ((root.i-progress-anim-tick - 0.6) / 1.4) - 1.5) * parent.width;
+                    y: 0;
+                    height: parent.height;
+                    width: 0.8 * parent.width;
+
+                    border-width: 1px;
+                    border-radius: 3px;
+                    border-color: root.i-progress-anim-tick < 0.6 ? transparent : #60cdff;  // Palette.themePrimary
+                    background: root.i-progress-anim-tick < 0.6 ? transparent : #60cdff;  // Palette.themePrimary
                 }
             }
             HorizontalLayout {

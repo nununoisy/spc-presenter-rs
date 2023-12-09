@@ -9,6 +9,7 @@ use std::rc::Rc;
 use spc::spc::{Id666Tag, Spc};
 use snes_apu::apu::Apu;
 pub use snes_apu::dsp::voice::ResamplingMode;
+use crate::emulator::snes_apu::dsp::pitch_detection::VoicePitch;
 
 pub trait ApuStateReceiver {
     fn receive(&mut self, channel: usize, volume: u8, amplitude: i16, frequency: f64, timbre: usize, balance: f64, edge: bool, kon_frames: usize);
@@ -33,7 +34,7 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new<P: AsRef<Path>>(spc_path: P) -> Result<Self, String> {
+    pub fn from_spc<P: AsRef<Path>>(spc_path: P) -> Result<Self, String> {
         let spc_file = Spc::load(spc_path)
             .map_err(|e| format!("Failed to load SPC! {}", e))?;
         let apu = Apu::from_spc(&spc_file);
@@ -125,6 +126,11 @@ impl Emulator {
     }
 
     pub fn set_manual_sample_tuning(&mut self, source: u8, pitch: f64) {
-        self.apu.dsp.as_mut().unwrap().source_pitches.insert(source, pitch);
+        self.apu.dsp.as_mut().unwrap().source_pitches.insert(source, VoicePitch {
+            pitch,
+            piecewise_pitch: vec![],
+            clarity: 1.0,
+            loudness: vec![1.0]
+        });
     }
 }

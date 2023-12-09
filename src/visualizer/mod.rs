@@ -1,20 +1,25 @@
-mod oscilloscope;
-pub mod channel_settings;
-mod tile_map;
 mod filters;
+pub mod channel_settings;
+mod oscilloscope;
 mod piano_roll;
+mod tile_map;
 
-use ringbuf::{HeapRb, Rb, StaticRb};
-use raqote::{DrawTarget, SolidSource};
+use tiny_skia::{Color, Pixmap, Rect};
+use channel_settings::{ChannelSettingsManager, ChannelSettings};
+use filters::HighPassIIR;
+use oscilloscope::OscilloscopeState;
+use piano_roll::PianoRollState;
 use crate::emulator::ApuStateReceiver;
-use crate::visualizer::channel_settings::ChannelSettingsManager;
-use crate::visualizer::filters::HighPassIIR;
-use crate::visualizer::tile_map::TileMap;
+use tile_map::TileMap;
+use crate::config::PianoRollConfig;
+
+pub const APU_STATE_BUF_SIZE: usize = 4096;
+const FONT_IMAGE: &'static [u8] = include_bytes!("8x8_font.png");
+const FONT_CHAR_MAP: &'static str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
 
 #[derive(Copy, Clone, Default)]
 pub struct ChannelState {
-    pub channel: usize,
-    pub volume: u8,
+    pub volume: f32,
     pub amplitude: f32,
     pub frequency: f64,
     pub timbre: usize,
@@ -24,52 +29,86 @@ pub struct ChannelState {
 }
 
 pub struct Visualizer {
-    canvas: DrawTarget,
-    settings: ChannelSettingsManager,
-    channel_states: Vec<HeapRb<ChannelState>>,
+    channels: usize,
+    canvas: Pixmap,
+    config: PianoRollConfig,
+
+    channel_last_states: Vec<ChannelState>,
     channel_filters: Vec<HighPassIIR>,
-    state_slices: HeapRb<ChannelState>,
-    font: TileMap
+    oscilloscope_states: Vec<OscilloscopeState>,
+    piano_roll_states: Vec<PianoRollState>,
+
+    font: TileMap,
+    oscilloscope_divider_cache: Option<(f32, Pixmap)>
 }
 
-const APU_STATE_BUF_SIZE: usize = 8192;
-const FONT_IMAGE: &'static [u8] = include_bytes!("8x8_font.png");
-const FONT_CHAR_MAP: &'static str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
-
 impl Visualizer {
-    pub fn new() -> Self {
-        let mut channel_states: Vec<HeapRb<ChannelState>> = Vec::new();
-        let mut channel_filters: Vec<HighPassIIR> = Vec::new();
-        for _ in 0..8 {
-            channel_states.push(HeapRb::new(APU_STATE_BUF_SIZE));
-            channel_filters.push(HighPassIIR::new(44100.0, 300.0));
+    pub fn new(channels: usize, width: u32, height: u32, sample_rate: u32, config: PianoRollConfig) -> Self {
+        let mut oscilloscope_states: Vec<OscilloscopeState> = Vec::with_capacity(channels);
+        let mut piano_roll_states: Vec<PianoRollState> = Vec::with_capacity(channels);
+        for _ in 0..channels {
+            oscilloscope_states.push(OscilloscopeState::new());
+            piano_roll_states.push(PianoRollState::new(sample_rate as f32, config.speed_multiplier as f32 * 4.0, config.starting_octave as f32));
         }
 
         Self {
-            canvas: DrawTarget::new(960, 540),
-            settings: ChannelSettingsManager::default(),
-            channel_states,
-            channel_filters,
-            state_slices: HeapRb::new(APU_STATE_BUF_SIZE),
-            font: TileMap::new(FONT_IMAGE, 8, 8, FONT_CHAR_MAP).unwrap()
+            channels,
+            canvas: Pixmap::new(width, height).unwrap(),
+            config,
+            channel_last_states: vec![ChannelState::default(); channels],
+            channel_filters: vec![HighPassIIR::new(sample_rate as f32, 300.0); channels],
+            oscilloscope_states,
+            piano_roll_states,
+            font: TileMap::new(Pixmap::decode_png(FONT_IMAGE).unwrap(), 8, 8, FONT_CHAR_MAP),
+            oscilloscope_divider_cache: None
         }
     }
 
-    /// Get canvas buffer as BGRA data (little endian) or ARGB data (big endian)
-    pub fn get_canvas_buffer(&self) -> Vec<u8> {
-        self.canvas.get_data_u8().to_vec()
+    pub fn get_canvas_buffer(&self) -> &[u8] {
+        self.canvas.data()
     }
 
     pub fn clear(&mut self) {
-        self.canvas.clear(SolidSource::from_unpremultiplied_argb(0, 0, 0, 0));
+        self.canvas.fill(Color::TRANSPARENT);
     }
 
-    pub fn settings_manager(&self) -> ChannelSettingsManager {
-        self.settings.clone()
+    pub fn draw(&mut self) {
+        self.clear();
+
+        let oscilloscopes_pos = Rect::from_xywh(
+            0.0,
+            0.0,
+            self.canvas.width() as f32,
+            self.config.waveform_height as f32
+        ).unwrap();
+
+        let max_channels_per_row = if self.is_vertical_layout() {
+            4
+        } else {
+            8
+        };
+        self.draw_oscilloscopes(oscilloscopes_pos, max_channels_per_row);
+
+        let piano_roll_pos = Rect::from_xywh(
+            0.0,
+            oscilloscopes_pos.bottom(),
+            self.canvas.width() as f32,
+            self.canvas.height() as f32 - oscilloscopes_pos.height()
+        ).unwrap();
+
+        self.draw_piano_roll(piano_roll_pos);
+    }
+
+    pub fn settings_manager(&self) -> &ChannelSettingsManager {
+        &self.config.settings
     }
 
     pub fn settings_manager_mut(&mut self) -> &mut ChannelSettingsManager {
-        &mut self.settings
+        &mut self.config.settings
+    }
+
+    pub fn is_vertical_layout(&self) -> bool {
+        self.canvas.height() > self.canvas.width()
     }
 }
 
@@ -77,24 +116,24 @@ impl ApuStateReceiver for Visualizer {
     fn receive(&mut self, channel: usize, volume: u8, amplitude: i16, frequency: f64, timbre: usize, balance: f64, edge: bool, kon_frames: usize) {
         const C_0: f64 = 16.351597831287;
 
-        let buf = self.channel_states.get_mut(channel).unwrap();
         let filter = self.channel_filters.get_mut(channel).unwrap();
-
         filter.consume(amplitude as f32);
 
-        let timbre_max = self.settings.settings(channel).num_colors();
+        let settings = self.config.settings.settings(channel).unwrap();
+        let timbre_max = settings.num_colors();
 
         let state = ChannelState {
-            channel,
-            volume,
+            volume: volume as f32,
             amplitude: filter.output(),
-            frequency, //: frequency.max(C_0),
+            frequency,
             timbre: timbre % timbre_max,
             balance,
             edge,
             kon_frames
         };
 
-        buf.push_overwrite(state);
+        self.oscilloscope_states[channel].consume(&state, settings);
+        self.piano_roll_states[channel].consume(&state, settings);
+        self.channel_last_states[channel] = state;
     }
 }

@@ -45,19 +45,19 @@ impl<R: Read> ReadAll for BinaryReader<R> {
 impl<R: Read> BinaryRead for BinaryReader<R> {
     fn read_u8(&mut self) -> Result<u8> {
         let mut buf = [0; 1];
-        try!(self.read_all(&mut buf));
+        self.read_all(&mut buf)?;
         Ok(buf[0])
     }
 
     fn read_le_u16(&mut self) -> Result<u16> {
         let mut buf = [0; 2];
-        try!(self.read_all(&mut buf));
+        self.read_all(&mut buf)?;
         Ok(((buf[1] as u16) << 8) | (buf[0] as u16))
     }
 
     fn read_le_i32(&mut self) -> Result<i32> {
         let mut buf = [0; 4];
-        try!(self.read_all(&mut buf));
+        self.read_all(&mut buf)?;
         Ok((
             ((buf[3] as u32) << 24) | ((buf[2] as u32) << 16) |
             ((buf[1] as u32) << 8) | (buf[0] as u32)) as i32)

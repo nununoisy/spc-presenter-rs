@@ -9,6 +9,7 @@ use indicatif::{FormattedDuration, HumanBytes, HumanDuration};
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 use slint;
 use slint::Model as _;
+use tiny_skia::Color;
 use crate::emulator::ResamplingMode;
 use crate::gui::render_thread::{RenderThreadMessage, RenderThreadRequest};
 use crate::renderer::render_options::{RendererOptions, StopCondition};
@@ -38,9 +39,10 @@ fn slint_int_arr<I, N>(a: I) -> slint::ModelRc<i32>
     slint::ModelRc::new(slint::VecModel::from(int_vec))
 }
 
-fn slint_color_component_arr<I: IntoIterator<Item = raqote::Color>>(a: I) -> slint::ModelRc<slint::ModelRc<i32>> {
+fn slint_color_component_arr<I: IntoIterator<Item = Color>>(a: I) -> slint::ModelRc<slint::ModelRc<i32>> {
     let color_vecs: Vec<slint::ModelRc<i32>> = a.into_iter()
-        .map(|c| slint::ModelRc::new(slint::VecModel::from(vec![c.r() as i32, c.g() as i32, c.b() as i32])))
+        .map(|c| c.to_color_u8())
+        .map(|c| slint::ModelRc::new(slint::VecModel::from(vec![c.red() as i32, c.green() as i32, c.blue() as i32])))
         .collect();
     slint::ModelRc::new(slint::VecModel::from(color_vecs))
 }
@@ -508,7 +510,7 @@ pub fn run() {
                 StopConditionType::SpcDuration => StopCondition::SpcDuration
             };
 
-            let base_colors: Vec<raqote::Color> = main_window_weak.unwrap().get_channel_base_colors()
+            let base_colors: Vec<Color> = main_window_weak.unwrap().get_channel_base_colors()
                 .as_any()
                 .downcast_ref::<slint::VecModel<slint::ModelRc<i32>>>()
                 .unwrap()
@@ -523,7 +525,7 @@ pub fn run() {
                     let g = component_iter.next().unwrap() as u8;
                     let b = component_iter.next().unwrap() as u8;
 
-                    raqote::Color::new(0xFF, r, g, b)
+                    Color::from_rgba8(r, g, b, 0xFF)
                 })
                 .collect();
             options.borrow_mut().channel_base_colors = base_colors;
@@ -560,7 +562,7 @@ pub fn run() {
                         let g = component_iter.next().unwrap() as u8;
                         let b = component_iter.next().unwrap() as u8;
 
-                        raqote::Color::new(0xFF, r, g, b)
+                        Color::from_rgba8(r, g, b, 0xFF)
                     };
                     options.borrow_mut().per_sample_colors.insert(config.source as u8, color);
                 }

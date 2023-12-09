@@ -5,6 +5,8 @@ mod renderer;
 mod cli;
 mod tuning;
 mod gui;
+mod config;
+mod sample_processing;
 
 use std::env;
 

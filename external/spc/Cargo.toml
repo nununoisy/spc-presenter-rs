@@ -7,3 +7,6 @@ homepage = "https://github.com/emu-rs/spc"
 repository = "https://github.com/emu-rs/spc"
 keywords = ["spc", "snes", "super", "nintendo", "music"]
 license = "BSD-2-Clause"
+
+[dependencies]
+encoding_rs = "0.8.33"

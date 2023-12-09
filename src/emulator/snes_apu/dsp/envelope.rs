@@ -55,6 +55,11 @@ impl Envelope {
         self.mode = Mode::Release;
     }
 
+    pub fn kon_delay_tick(&mut self) {
+        self.level = 0;
+        self.hidden_level = 0;
+    }
+
     pub fn tick(&mut self) {
         let mut env = self.level;
         match self.mode {

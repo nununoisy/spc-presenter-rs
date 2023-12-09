@@ -9,6 +9,7 @@ use ringbuf::{HeapRb, Rb};
 use ringbuf::ring_buffer::RbBase;
 use spc::spc::Spc;
 use render_options::RendererOptions;
+use crate::config::PianoRollConfig;
 use crate::emulator::{Emulator, ResamplingMode};
 use crate::renderer::render_options::StopCondition;
 use crate::video_builder;
@@ -33,8 +34,8 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(options: RendererOptions) -> Result<Self, String> {
-        let emulator = Emulator::new(options.input_path.clone())?;
-        let viz = Rc::new(RefCell::new(Visualizer::new()));
+        let emulator = Emulator::from_spc(options.input_path.clone())?;
+        let viz = Rc::new(RefCell::new(Visualizer::new(8, 960, 540, 32000, PianoRollConfig::default())));
 
         let mut video_options = options.video_options.clone();
 
@@ -71,7 +72,7 @@ impl Renderer {
         self.emulator.set_filter_enabled(self.options.filter_enabled);
 
         for (i, color) in self.options.channel_base_colors.iter().enumerate() {
-            self.viz.borrow_mut().settings_manager_mut().settings_mut(i).set_colors(&vec![color.clone()]);
+            self.viz.borrow_mut().settings_manager_mut().settings_mut(i).unwrap().set_colors(&vec![color.clone()]);
         }
 
         for (source, pitch) in &self.options.manual_sample_tunings {
@@ -91,9 +92,7 @@ impl Renderer {
     pub fn step(&mut self) -> Result<bool, String> {
         self.emulator.step()?;
 
-        self.viz.borrow_mut().clear();
-        self.viz.borrow_mut().draw_oscilloscopes();
-        self.viz.borrow_mut().draw_piano_roll();
+        self.viz.borrow_mut().draw();
 
         self.vb.push_video_data(&self.viz.borrow().get_canvas_buffer())?;
         if let Some(audio) = self.emulator.get_audio_samples(Some(self.vb.audio_frame_size())) {
