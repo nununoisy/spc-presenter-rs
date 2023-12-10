@@ -39,8 +39,13 @@ export component SampleConfigWidget {
     property <[int]> i-color: [0, 0, 0];
     property <bool> i-use-color: false;
 
-    callback add-sample(int) -> int;
-    callback remove-sample(int) -> int;
+    callback play-audio(SampleConfig) -> bool;
+    callback stop-audio();
+
+    public function reset() {
+        root.stop-audio();
+        root.selected-sample-index = -1;
+    }
 
     function i-update-pitch-type() {
         if (root.i-pitch-type-index == 0) {
@@ -69,6 +74,7 @@ export component SampleConfigWidget {
     }
 
     function i-switch-selected-sample() {
+        root.stop-audio();
         if (root.selected-sample-index != -1) {
             root.i-name = root.sample-configs[root.selected-sample-index].name;
             root.i-source = root.sample-configs[root.selected-sample-index].source;
@@ -116,87 +122,6 @@ export component SampleConfigWidget {
                     }
                 }
             }
-
-            HorizontalLayout {
-                alignment: stretch;
-
-                Rectangle {
-                    horizontal-stretch: 1.0;
-                }
-                Button {
-                    icon: @image-url("add.svg");
-                    enabled: root.enabled;
-                    clicked => {
-                        i-add-sample-popup.show();
-                    }
-                }
-                Rectangle {
-                    width: 10px;
-                }
-                Button {
-                    icon: @image-url("subtract.svg");
-                    enabled: root.enabled;
-                    clicked => {
-                        root.selected-sample-index = root.remove-sample(root.selected-sample-index);
-                        root.i-switch-selected-sample();
-                    }
-                }
-            }
-
-            i-add-sample-popup := PopupWindow {
-                width: 100px;
-                close-on-click: false;
-
-                Rectangle {
-                    height: 100%;
-                    width: 100%;
-                    background: #1c1c1c;
-                    border-radius: 2px;
-                }
-                VerticalBox {
-                    alignment: start;
-                    spacing: 8px;
-
-                    HorizontalLayout {
-                        alignment: stretch;
-                        spacing: 6px;
-
-                        Text {
-                            text: "Source index:";
-                        }
-                        i-popup-source-edit := LineEdit {
-                            text: "$";
-                        }
-                    }
-                    HorizontalLayout {
-                        alignment: center;
-                        spacing: 6px;
-
-                        StandardButton {
-                            kind: ok;
-                            clicked => {
-                                if (!root.enabled) {
-                                    i-add-sample-popup.close();
-                                } else if (SampleUtils.is-hex(i-popup-source-edit.text)) {
-                                    root.selected-sample-index = root.add-sample(SampleUtils.parse-hex(i-popup-source-edit.text));
-                                    root.i-switch-selected-sample();
-                                    i-add-sample-popup.close();
-                                } else if (i-popup-source-edit.text.is-float() && Math.floor(i-popup-source-edit.text.to-float()) == i-popup-source-edit.text.to-float()) {
-                                    root.selected-sample-index = root.add-sample(i-popup-source-edit.text.to-float());
-                                    root.i-switch-selected-sample();
-                                    i-add-sample-popup.close();
-                                }
-                            }
-                        }
-                        StandardButton {
-                            kind: cancel;
-                            clicked => {
-                                i-add-sample-popup.close();
-                            }
-                        }
-                    }
-                }
-            }
         }
         
         if root.selected-sample-index == -1: VerticalBox {
@@ -216,9 +141,29 @@ export component SampleConfigWidget {
             alignment: start;
             spacing: 12px;
 
-            Text {
-                text: "Sample " + SampleUtils.format-hex(root.i-source) + ": " + root.i-name;
-                vertical-alignment: center;
+            HorizontalLayout {
+                alignment: stretch;
+                spacing: 8px;
+
+                Text {
+                    text: "Sample " + SampleUtils.format-hex(root.i-source) + ": " + root.i-name;
+                    vertical-alignment: center;
+                }
+                Rectangle {
+                    horizontal-stretch: 1.0;
+                }
+                Button {
+                    icon: self.checked ? @image-url("stop.svg") : @image-url("play.svg");
+                    checkable: true;
+                    clicked => {
+                        if (self.checked && root.selected-sample-index != -1) {
+                            self.checked = root.play-audio(root.sample-configs[root.selected-sample-index]);
+                        } else {
+                            root.stop-audio();
+                            self.checked = false;
+                        }
+                    }
+                }
             }
 
             HorizontalLayout {

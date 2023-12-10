@@ -116,4 +116,8 @@ impl VideoBackground for MTVideoBackground {
             }
         }
     }
+
+    fn format(&self) -> (format::Pixel, u32, u32) {
+        (format::Pixel::RGBA, self.w, self.h)
+    }
 }

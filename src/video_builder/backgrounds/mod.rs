@@ -3,10 +3,12 @@ mod video_bg;
 mod image_bg;
 
 use std::path::Path;
-use ffmpeg_next::frame;
+use ffmpeg_next::{format, frame};
 
 pub trait VideoBackground {
     fn next_frame(&mut self) -> frame::Video;
+
+    fn format(&self) -> (format::Pixel, u32, u32);
 }
 
 pub fn get_video_background<P: AsRef<Path>>(path: P, width: u32, height: u32) -> Option<Box<dyn VideoBackground>> {

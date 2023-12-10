@@ -25,7 +25,7 @@ const PIANO_KEYS: [PianoKey; 12] = [
     PianoKey::Black,        // A#
     PianoKey::WhiteRight    // B
 ];
-const C_0: f64 = 16.351597831287;
+pub const C_0: f64 = 16.351597831287;
 
 fn get_piano_key(index: isize, key_count: isize) -> PianoKey {
     let result = PIANO_KEYS[index.rem_euclid(12) as usize].clone();

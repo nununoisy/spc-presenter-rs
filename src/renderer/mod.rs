@@ -34,7 +34,7 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(options: RendererOptions) -> Result<Self> {
         let emulator = Emulator::from_spc(options.input_path.clone())?;
-        let viz = Rc::new(RefCell::new(Visualizer::new(8, 960, 540, 32000, PianoRollConfig::default())));
+        let viz = Rc::new(RefCell::new(Visualizer::new(8, 960, 540, 32000, PianoRollConfig::default(), options.sample_tunings.clone())));
 
         let mut video_options = options.video_options.clone();
 
@@ -71,10 +71,6 @@ impl Renderer {
 
         for (i, color) in self.options.channel_base_colors.iter().enumerate() {
             self.viz.borrow_mut().settings_manager_mut().settings_mut(i).unwrap().set_colors(&vec![color.clone()]);
-        }
-
-        for (source, pitch) in &self.options.manual_sample_tunings {
-            self.emulator.set_manual_sample_tuning(*source, *pitch);
         }
 
         if !self.options.per_sample_colors.is_empty() {

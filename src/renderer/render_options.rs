@@ -3,6 +3,7 @@ use std::str::FromStr;
 use std::ffi::OsStr;
 use tiny_skia::Color;
 use crate::emulator::ResamplingMode;
+use crate::sample_processing::SampleData;
 use crate::video_builder::video_options::VideoOptions;
 use crate::visualizer::channel_settings::ChannelSettings;
 
@@ -73,7 +74,7 @@ pub struct RendererOptions {
     pub fadeout_length: u64,
 
     pub channel_base_colors: Vec<Color>,
-    pub manual_sample_tunings: HashMap<u8, f64>,
+    pub sample_tunings: HashMap<u8, SampleData>,
     pub per_sample_colors: HashMap<u8, Color>,
     pub filter_enabled: bool,
     pub resampling_mode: ResamplingMode
@@ -105,7 +106,7 @@ impl Default for RendererOptions {
             stop_condition: StopCondition::Frames(300 * FRAME_RATE as u64),
             fadeout_length: 180,
             channel_base_colors: Vec::new(),
-            manual_sample_tunings: HashMap::new(),
+            sample_tunings: HashMap::new(),
             per_sample_colors: HashMap::new(),
             filter_enabled: true,
             resampling_mode: ResamplingMode::AccurateGaussian

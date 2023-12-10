@@ -172,16 +172,16 @@ fn get_renderer_options() -> RendererOptions {
         println!("Loaded Super MIDI Pak session version {}", session.version());
         for sample in session.samples().unwrap() {
             println!("Decoded sample: {}", &sample);
-            if sample.pitch.is_some() {
-                options.manual_sample_tunings.insert(sample.source, sample.pitch.unwrap());
-            }
+            // if sample.pitch.is_some() {
+            //     options.manual_sample_tunings.insert(sample.source, sample.pitch.unwrap());
+            // }
         }
     }
-    if let Some(manual_tunings) = matches.get_many::<(u8, f64)>("manual-tune") {
-        for (sample_index, pitch) in manual_tunings.cloned() {
-            options.manual_sample_tunings.insert(sample_index, pitch);
-        }
-    }
+    // if let Some(manual_tunings) = matches.get_many::<(u8, f64)>("manual-tune") {
+    //     for (sample_index, pitch) in manual_tunings.cloned() {
+    //         options.manual_sample_tunings.insert(sample_index, pitch);
+    //     }
+    // }
     if let Some(sample_colors) = matches.get_many::<(u8, Color)>("per-sample-color") {
         for (sample_index, color) in sample_colors.cloned() {
             options.per_sample_colors.insert(sample_index, color);

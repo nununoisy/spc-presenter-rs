@@ -4,7 +4,8 @@ mod threshold_distribution;
 mod loudness;
 mod filter;
 mod simd_sum;
+mod sample_processing;
 
 pub use yin::*;
-pub use filter::*;
 pub use loudness::*;
+pub use sample_processing::*;

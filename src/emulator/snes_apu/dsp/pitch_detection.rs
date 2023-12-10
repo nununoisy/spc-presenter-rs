@@ -1,6 +1,6 @@
 use super::dsp::Dsp;
 use super::brr_block_decoder::BrrBlockDecoder;
-use crate::sample_processing::{loudness, Yin};
+use crate::sample_processing::{sample_loudness, Yin};
 
 const PDA_WINDOW_LENGTH: usize = 2048;
 const PDA_WINDOW_STEP: usize = 512;
@@ -64,7 +64,7 @@ pub fn temporal_sample_pitch(sample: &[f64], base_pitch: f64, base_clarity: f64)
 
     let median_pitch = pitches[pitches.len() / 2];
 
-    let loudness = loudness(sample, 32000.0, PDA_WINDOW_LENGTH, PDA_WINDOW_STEP);
+    let loudness = sample_loudness(sample, 32000.0, PDA_WINDOW_LENGTH, PDA_WINDOW_STEP);
 
     VoicePitch {
         pitch: median_pitch,

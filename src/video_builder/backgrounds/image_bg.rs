@@ -24,4 +24,8 @@ impl VideoBackground for ImageBackground {
     fn next_frame(&mut self) -> frame::Video {
         self.0.clone()
     }
+
+    fn format(&self) -> (format::Pixel, u32, u32) {
+        (self.0.format(), self.0.width(), self.0.height())
+    }
 }

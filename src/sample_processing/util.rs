@@ -38,6 +38,19 @@ pub fn next_minimum(signal: &[f64], threshold: f64) -> (usize, bool) {
     }
 }
 
+pub fn linear_interpolate(signal: &[f64], x: f64, padding: f64) -> f64 {
+    if x.fract() == 0.0 {
+        return signal.get(x as usize).cloned().unwrap_or(padding);
+    }
+
+    let x0 = x.floor();
+    let x1 = x.ceil();
+    let y0 = signal.get(x0 as usize).cloned().unwrap_or(padding);
+    let y1 = signal.get(x1 as usize).cloned().unwrap_or(padding);
+
+    (y0 * (x1 - x) + y1 * (x - x0)) / (x1 - x0)
+}
+
 pub fn parabolic_interpolate(signal: &[f64], x1: usize) -> f64 {
     if x1 >= signal.len() {
         return x1 as f64;

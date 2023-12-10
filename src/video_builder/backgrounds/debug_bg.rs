@@ -22,4 +22,8 @@ impl VideoBackground for DebugBackground {
             .for_each(|px| *px = (0, 0, 255, 128));
         frame
     }
+
+    fn format(&self) -> (format::Pixel, u32, u32) {
+        (format::Pixel::RGBA, self.0, self.1)
+    }
 }

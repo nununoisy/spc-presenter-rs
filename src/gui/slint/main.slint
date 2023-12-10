@@ -55,13 +55,14 @@ export component MainWindow inherits Window {
     callback format-duration(StopConditionType, int) -> string;
     callback start-render();
     callback cancel-render();
-    callback add-sample(int) -> int;
-    callback remove-sample(int) -> int;
+    callback play-audio(SampleConfig) -> bool;
+    callback stop-audio();
 
     in property <string> version: "?";
     in property <string> ffmpeg-version: "?";
 
-    in property <bool> rendering;
+    in property <bool> rendering: false;
+    in property <bool> processing-samples: false;
     in property <float> progress: 0.0;
     in property <string> progress-title: "Idle";
     in property <string> progress-status: "";
@@ -93,6 +94,10 @@ export component MainWindow inherits Window {
 
     public function reformat-duration() {
         i-formatted-duration.text = root.format-duration(root.stop-condition-type, root.stop-condition-num);
+    }
+
+    public function reset-sample-configs() {
+        i-sample-config-widget.reset();
     }
 
     title: "SPCPresenter";
@@ -245,19 +250,19 @@ export component MainWindow inherits Window {
             }
             Button {
                 text: "Import tunings...";
-                enabled: !root.rendering;
+                enabled: !root.rendering && !root.processing-samples;
                 clicked => {
                     root.import-tunings();
                 }
             }
         }
 
-        SampleConfigWidget {
+        i-sample-config-widget := SampleConfigWidget {
             sample-configs: root.sample-configs;
-            enabled: !root.rendering;
+            enabled: !root.rendering && !root.processing-samples;
 
-            add-sample(s) => { root.add-sample(s) }
-            remove-sample(i) => { root.remove-sample(i) }
+            play-audio(config) => { root.play-audio(config) }
+            stop-audio => { root.stop-audio(); }
         }
 
         FileBrowser {
@@ -386,6 +391,7 @@ export component MainWindow inherits Window {
                     ? "Cancel"
                     : "Render!";
                 primary: !root.rendering;
+                enabled: !root.processing-samples;
                 clicked => {
                     if (root.rendering) {
                         root.cancel_render();

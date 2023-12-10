@@ -4,14 +4,16 @@ mod oscilloscope;
 mod piano_roll;
 mod tile_map;
 
+use std::collections::HashMap;
 use tiny_skia::{Color, Pixmap, Rect};
 use channel_settings::{ChannelSettingsManager, ChannelSettings};
 use filters::HighPassIIR;
 use oscilloscope::OscilloscopeState;
-use piano_roll::PianoRollState;
+use piano_roll::{PianoRollState, C_0};
 use crate::emulator::ApuStateReceiver;
 use tile_map::TileMap;
 use crate::config::PianoRollConfig;
+use crate::sample_processing::SampleData;
 
 pub const APU_STATE_BUF_SIZE: usize = 4096;
 const FONT_IMAGE: &'static [u8] = include_bytes!("8x8_font.png");
@@ -39,11 +41,12 @@ pub struct Visualizer {
     piano_roll_states: Vec<PianoRollState>,
 
     font: TileMap,
-    oscilloscope_divider_cache: Option<(f32, Pixmap)>
+    oscilloscope_divider_cache: Option<(f32, Pixmap)>,
+    sample_data: HashMap<u8, SampleData>
 }
 
 impl Visualizer {
-    pub fn new(channels: usize, width: u32, height: u32, sample_rate: u32, config: PianoRollConfig) -> Self {
+    pub fn new(channels: usize, width: u32, height: u32, sample_rate: u32, config: PianoRollConfig, sample_data: HashMap<u8, SampleData>) -> Self {
         let mut oscilloscope_states: Vec<OscilloscopeState> = Vec::with_capacity(channels);
         let mut piano_roll_states: Vec<PianoRollState> = Vec::with_capacity(channels);
         for _ in 0..channels {
@@ -60,7 +63,8 @@ impl Visualizer {
             oscilloscope_states,
             piano_roll_states,
             font: TileMap::new(Pixmap::decode_png(FONT_IMAGE).unwrap(), 8, 8, FONT_CHAR_MAP),
-            oscilloscope_divider_cache: None
+            oscilloscope_divider_cache: None,
+            sample_data
         }
     }
 
@@ -113,20 +117,65 @@ impl Visualizer {
 }
 
 impl ApuStateReceiver for Visualizer {
-    fn receive(&mut self, channel: usize, volume: u8, amplitude: i16, frequency: f64, timbre: usize, balance: f64, edge: bool, kon_frames: usize) {
-        const C_0: f64 = 16.351597831287;
+    fn receive(
+        &mut self,
+        channel: usize,
+        source: u8,
+        muted: bool,
+        envelope_level: i32,
+        volume: (u8, u8),
+        amplitude: (i32, i32),
+        pitch: u16,
+        noise_clock: Option<u8>,
+        edge: bool,
+        kon_frames: usize,
+        sample_block_index: usize
+    ) {
+        let sample_data = self.sample_data.get(&source).expect("Missing sample data!");
+        let source_pitch = sample_data.pitch_at(sample_block_index);
+        let source_loudness = match noise_clock {
+            Some(_) => 1.0,
+            None => sample_data.loudness_at(sample_block_index)
+        };
+        
+        let (l_volume, r_volume) = volume;
+        let (l_amplitude, r_amplitude) = amplitude;
+        
+        let volume = if muted {
+            0.0
+        } else {
+            let mean_volume = ((l_volume as f32 / 2.0) + (r_volume as f32 / 2.0)).abs();
+            (source_loudness as f32 * 2.8 * (mean_volume / 3.0 + 1.0).log2() * (envelope_level as f32 / 2047.0)).ceil()
+        };
+
+        let amplitude_pre = {
+            if (l_volume as i8) < 0 && (r_volume as i8) > 0 {
+                ((r_amplitude - l_amplitude) / 2) as i16
+            } else if (l_volume as i8) > 0 && (r_volume as i8) < 0 {
+                ((l_amplitude - r_amplitude) / 2) as i16
+            } else {
+                ((l_amplitude + r_amplitude) / 2) as i16
+            }
+        };
+
+        let frequency = match noise_clock {
+            Some(t) => C_0 * (t as f64 / 12.0).exp2(),
+            None => source_pitch * pitch as f64 / 0x1000 as f64
+        }.max(f64::EPSILON);
+
+        let balance = ((l_volume as f64).abs() / -128.0) + ((r_volume as f64).abs() / 128.0) + 0.5;
 
         let filter = self.channel_filters.get_mut(channel).unwrap();
-        filter.consume(amplitude as f32);
+        filter.consume(amplitude_pre as f32);
 
         let settings = self.config.settings.settings(channel).unwrap();
         let timbre_max = settings.num_colors();
 
         let state = ChannelState {
-            volume: volume as f32,
+            volume,
             amplitude: filter.output(),
             frequency,
-            timbre: timbre % timbre_max,
+            timbre: source as usize % timbre_max,
             balance,
             edge,
             kon_frames

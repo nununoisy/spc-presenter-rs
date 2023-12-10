@@ -1,7 +1,7 @@
 use super::util;
 use super::filter::{BiquadIIRFilter, FilterType};
 
-pub fn loudness(signal: &[f64], sample_rate: f64, frame_length: usize, hop_length: usize) -> Vec<f64> {
+pub fn sample_loudness(signal: &[f64], sample_rate: f64, frame_length: usize, hop_length: usize) -> Vec<f64> {
     // K-weighting filter chain to quantize the head effects. From ITU-R BS.1770-5
     let high_shelf = BiquadIIRFilter::new(FilterType::HighShelf, 4.0, 0.5_f64.sqrt(), 1500.0, sample_rate);
     let high_pass = BiquadIIRFilter::new(FilterType::HighPass, 0.0, 0.5, 38.0, sample_rate);
