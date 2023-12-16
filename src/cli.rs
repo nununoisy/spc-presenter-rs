@@ -1,5 +1,5 @@
 use anyhow::{Result, Context, bail};
-use clap::{arg, Arg, ArgAction, value_parser, Command};
+use clap::{arg, ArgAction, value_parser, Command};
 use std::path::PathBuf;
 use indicatif::{FormattedDuration, HumanBytes, ProgressBar, ProgressStyle};
 use std::fmt::Write;

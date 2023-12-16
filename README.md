@@ -37,15 +37,21 @@ video.
       some drivers.
     - S-DSP is not yet cycle-accurate. It instead runs in 64 SMP-clock periods.
 - Automatic BRR sample analysis:
-  - Rips samples from the S-DSP as the song plays, and tunes them using
-    the pYIN pitch detection algorithm.
+  - Rips samples from the S-DSP as the song plays.
+  - Samples are tuned using a custom implementation of the pYIN pitch detection
+    algorithm.
     - Works quite well for monophonic pitched samples and some percussion.
+  - Sample loudness is also computed to be factored in to the channel volume
+    calculation.
   - Manual tuning parameters can be specified per source index:
     - As a fundamental frequency in Hz
     - As an AddMusicK tuning multiplier and submultiplier
     - From Super MIDI Pak session JSON files.
     - Support is planned for automatic imports from AddMusicK TXT files
       and XM/IT files.
+  - The UI displays ripped samples and allows you to play them.
+    - Useful for fine-tuning sample fundamental pitch...
+    - ...or just to play around with the samples a bit.
   - Support is planned for automatic percussion classification.
   - Support is planned for automatic polyphonic sample pitch detection.
 - Outputs a video file:
@@ -92,8 +98,8 @@ and optionally `Qt6` development packages installed, then clone the repo and run
     - *Note:* Video backgrounds must be 60 FPS, or they will play at
       the wrong speed. A fix for this is planned.
 7. Select additional rendering options:
-    - Use Blargg's DSP post-filter: applies the band-pass filter from `snes_spc/SPC_Filter.cpp`.
-    - Accurate interpolation: uses a more accurate Gaussian kernel for sample interpolation.
+    - Blargg's DSP post-filter: applies the band-pass filter from `snes_spc/SPC_Filter.cpp`.
+    - Sample interpolation: determines the filter used to stretch/compress samples in the DSP.
 8. Click **Render!** to select the output video filename and begin rendering
    the visualization.
     - If you would like to render a transparent video for editing, then choose

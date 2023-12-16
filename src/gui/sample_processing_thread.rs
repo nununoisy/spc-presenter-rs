@@ -70,7 +70,7 @@ pub fn sample_processing_thread<F>(cb: F) -> (thread::JoinHandle<()>, mpsc::Send
                 match rt_unwrap!(sample_processor.step(), cb, 'main) {
                     SampleProcessorProgress::Finished => break 'processing,
                     progress => {
-                        if last_progress_timestamp.elapsed().as_secs_f64() >= 0.01 {
+                        if last_progress_timestamp.elapsed().as_secs_f64() >= 0.25 {
                             last_progress_timestamp = Instant::now();
                             cb(SampleProcessingThreadMessage::ProcessingProgress(progress));
                         }

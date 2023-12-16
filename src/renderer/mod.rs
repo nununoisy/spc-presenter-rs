@@ -2,13 +2,11 @@ pub mod render_options;
 
 use anyhow::{Result};
 use std::cell::RefCell;
-use std::fmt::Display;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 use ringbuf::{HeapRb, Rb};
 use ringbuf::ring_buffer::RbBase;
 use render_options::RendererOptions;
-use crate::config::PianoRollConfig;
 use crate::emulator::Emulator;
 use crate::renderer::render_options::StopCondition;
 use crate::video_builder;
@@ -34,7 +32,14 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(options: RendererOptions) -> Result<Self> {
         let emulator = Emulator::from_spc(options.input_path.clone())?;
-        let viz = Rc::new(RefCell::new(Visualizer::new(8, 960, 540, 32000, PianoRollConfig::default(), options.sample_tunings.clone())));
+        let viz = Rc::new(RefCell::new(Visualizer::new(
+            8,
+            options.video_options.resolution_in.0,
+            options.video_options.resolution_in.1,
+            32000,
+            options.config.piano_roll.clone(),
+            options.sample_tunings.clone()
+        )));
 
         let mut video_options = options.video_options.clone();
 
@@ -66,12 +71,8 @@ impl Renderer {
     pub fn start_encoding(&mut self) -> Result<()> {
         self.emulator.init();
         self.emulator.set_state_receiver(Some(self.viz.clone()));
-        self.emulator.set_resampling_mode(self.options.resampling_mode.clone());
-        self.emulator.set_filter_enabled(self.options.filter_enabled);
-
-        for (i, color) in self.options.channel_base_colors.iter().enumerate() {
-            self.viz.borrow_mut().settings_manager_mut().settings_mut(i).unwrap().set_colors(&vec![color.clone()]);
-        }
+        self.emulator.set_resampling_mode(self.options.config.emulator.resampling_mode);
+        self.emulator.set_filter_enabled(self.options.config.emulator.filter_enabled);
 
         if !self.options.per_sample_colors.is_empty() {
             self.viz.borrow_mut().settings_manager_mut().put_per_sample_colors(self.options.per_sample_colors.clone());

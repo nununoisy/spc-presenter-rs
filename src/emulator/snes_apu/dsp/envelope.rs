@@ -16,9 +16,7 @@ pub struct Envelope {
 
     mode: Mode,
     pub level: i32,
-    hidden_level: i32,
-
-    hidden_skip_brr: bool,
+    hidden_level: i32
 }
 
 impl Envelope {
@@ -32,9 +30,7 @@ impl Envelope {
 
             mode: Mode::Release,
             level: 0,
-            hidden_level: 0,
-
-            hidden_skip_brr: false
+            hidden_level: 0
         }
     }
 
@@ -67,7 +63,6 @@ impl Envelope {
                 env -= 8;
                 if env < 0 {
                     env = 0;
-                    // self.hidden_skip_brr = true;
                 }
                 self.level = env;
             },
@@ -142,11 +137,5 @@ impl Envelope {
                 self.level = env;
             }
         }
-    }
-
-    pub fn skip_brr(&mut self) -> bool {
-        let result = self.hidden_skip_brr;
-        self.hidden_skip_brr = false;
-        result
     }
 }

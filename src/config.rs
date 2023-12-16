@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use tiny_skia::Color;
 use csscolorparser::Color as CssColor;
+use crate::emulator::ResamplingMode;
 use crate::visualizer::channel_settings::ChannelSettingsManager;
 
 fn serialize_color<S: Serializer>(color: &Color, serializer: S) -> Result<S::Ok, S::Error> {
@@ -65,9 +66,55 @@ impl Default for PianoRollConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Copy, Clone)]
+enum SerializableResamplingMode {
+    #[serde(rename = "accurate")]
+    Accurate,
+    #[serde(rename = "gaussian")]
+    Gaussian,
+    #[serde(rename = "linear")]
+    Linear
+}
+
+fn serialize_resampling_mode<S: Serializer>(resampling_mode: &ResamplingMode, serializer: S) -> Result<S::Ok, S::Error> {
+    let resampling_mode = match resampling_mode {
+        ResamplingMode::Accurate => SerializableResamplingMode::Accurate,
+        ResamplingMode::Gaussian => SerializableResamplingMode::Gaussian,
+        ResamplingMode::Linear => SerializableResamplingMode::Linear
+    };
+    resampling_mode.serialize(serializer)
+}
+
+fn deserialize_resampling_mode<'de, D: Deserializer<'de>>(deserializer: D) -> Result<ResamplingMode, D::Error> {
+    let resampling_mode = match SerializableResamplingMode::deserialize(deserializer)? {
+        SerializableResamplingMode::Accurate => ResamplingMode::Accurate,
+        SerializableResamplingMode::Gaussian => ResamplingMode::Gaussian,
+        SerializableResamplingMode::Linear => ResamplingMode::Linear
+    };
+    Ok(resampling_mode)
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
+pub struct EmulatorConfig {
+    pub filter_enabled: bool,
+    #[serde(serialize_with = "serialize_resampling_mode", deserialize_with = "deserialize_resampling_mode")]
+    pub resampling_mode: ResamplingMode
+}
+
+impl Default for EmulatorConfig {
+    fn default() -> Self {
+        Self {
+            filter_enabled: true,
+            resampling_mode: ResamplingMode::default()
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
 pub struct Config {
+    pub emulator: EmulatorConfig,
     pub piano_roll: PianoRollConfig
 }
 

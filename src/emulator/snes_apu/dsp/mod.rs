@@ -7,4 +7,3 @@ mod filter;
 mod ring_buffer;
 pub mod dsp;
 mod brr_stream_decoder;
-pub mod pitch_detection;

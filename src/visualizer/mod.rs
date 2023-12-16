@@ -9,17 +9,18 @@ use tiny_skia::{Color, Pixmap, Rect};
 use channel_settings::{ChannelSettingsManager, ChannelSettings};
 use filters::HighPassIIR;
 use oscilloscope::OscilloscopeState;
-use piano_roll::{PianoRollState, C_0};
+use piano_roll::PianoRollState;
 use crate::emulator::ApuStateReceiver;
 use tile_map::TileMap;
 use crate::config::PianoRollConfig;
 use crate::sample_processing::SampleData;
 
+pub const C_0: f64 = 16.351597831287;
 pub const APU_STATE_BUF_SIZE: usize = 4096;
 const FONT_IMAGE: &'static [u8] = include_bytes!("8x8_font.png");
 const FONT_CHAR_MAP: &'static str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
 
-#[derive(Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct ChannelState {
     pub volume: f32,
     pub amplitude: f32,
@@ -123,7 +124,7 @@ impl ApuStateReceiver for Visualizer {
         source: u8,
         muted: bool,
         envelope_level: i32,
-        volume: (u8, u8),
+        volume: (i8, i8),
         amplitude: (i32, i32),
         pitch: u16,
         noise_clock: Option<u8>,
@@ -144,14 +145,14 @@ impl ApuStateReceiver for Visualizer {
         let volume = if muted {
             0.0
         } else {
-            let mean_volume = ((l_volume as f32 / 2.0) + (r_volume as f32 / 2.0)).abs();
+            let mean_volume = (l_volume as f32 / 2.0).abs() + (r_volume as f32 / 2.0).abs();
             (source_loudness as f32 * 2.8 * (mean_volume / 3.0 + 1.0).log2() * (envelope_level as f32 / 2047.0)).ceil()
         };
 
         let amplitude_pre = {
-            if (l_volume as i8) < 0 && (r_volume as i8) > 0 {
+            if l_volume < 0 && r_volume > 0 {
                 ((r_amplitude - l_amplitude) / 2) as i16
-            } else if (l_volume as i8) > 0 && (r_volume as i8) < 0 {
+            } else if l_volume > 0 && r_volume < 0 {
                 ((l_amplitude - r_amplitude) / 2) as i16
             } else {
                 ((l_amplitude + r_amplitude) / 2) as i16

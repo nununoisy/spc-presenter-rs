@@ -1,6 +1,7 @@
+use std::cmp::Ordering;
 use ringbuf::{HeapRb, Rb};
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Rect, Transform};
-use super::{Visualizer, APU_STATE_BUF_SIZE, ChannelState, ChannelSettings};
+use super::{C_0, Visualizer, APU_STATE_BUF_SIZE, ChannelState, ChannelSettings};
 
 #[derive(Copy, Clone, PartialEq)]
 enum PianoKey {
@@ -25,7 +26,6 @@ const PIANO_KEYS: [PianoKey; 12] = [
     PianoKey::Black,        // A#
     PianoKey::WhiteRight    // B
 ];
-pub const C_0: f64 = 16.351597831287;
 
 fn get_piano_key(index: isize, key_count: isize) -> PianoKey {
     let result = PIANO_KEYS[index.rem_euclid(12) as usize].clone();
@@ -48,7 +48,8 @@ pub struct PianoRollState {
     pub slices: HeapRb<SliceState>,
     samples_per_frame: f32,
     taken_samples: f32,
-    starting_octave: f32
+    starting_octave: f32,
+    volume_buf: Vec<f32>
 }
 
 impl PianoRollState {
@@ -57,11 +58,13 @@ impl PianoRollState {
             slices: HeapRb::new(APU_STATE_BUF_SIZE),
             samples_per_frame: sample_rate / (60.0 * scroll_speed),
             taken_samples: 0.0,
-            starting_octave
+            starting_octave,
+            volume_buf: Vec::new()
         }
     }
 
     pub fn consume(&mut self, state: &ChannelState, settings: &ChannelSettings) {
+        self.volume_buf.push(state.volume);
         self.taken_samples += 1.0;
         if self.taken_samples < self.samples_per_frame {
             return;
@@ -74,7 +77,10 @@ impl PianoRollState {
 
         let color = settings.color(state).unwrap();
         let index = note + 12.0 * octave;
-        let width = state.volume;
+        let width = self.volume_buf
+            .drain(..)
+            .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+            .unwrap_or(0.0);
 
         debug_assert!(!index.is_nan(), "Piano key index is NaN?!");
 

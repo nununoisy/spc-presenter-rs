@@ -1,5 +1,4 @@
 use std::f64::consts::PI;
-use std::iter;
 use rustfft::num_complex::ComplexFloat;
 
 #[derive(Debug, Copy, Clone, PartialEq)]

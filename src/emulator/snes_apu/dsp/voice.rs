@@ -8,11 +8,12 @@ use super::gaussian::{HALF_KERNEL_SIZE, HALF_KERNEL};
 
 const RESAMPLE_BUFFER_LEN: usize = 12;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default, PartialEq)]
 pub enum ResamplingMode {
     Linear,
     Gaussian,
-    AccurateGaussian
+    #[default]
+    Accurate
 }
 
 #[derive(Clone, Copy)]
@@ -170,7 +171,7 @@ impl Voice {
 
         let mut sample = if !self.noise_on {
             let base_pos = match self.resampling_mode {
-                ResamplingMode::AccurateGaussian => self.resample_buffer_pos + (self.sample_pos >> 12) as usize,
+                ResamplingMode::Accurate => self.resample_buffer_pos + (self.sample_pos >> 12) as usize,
                 _ => self.resample_buffer_pos
             };
 
@@ -192,7 +193,7 @@ impl Voice {
                     let p4 = HALF_KERNEL[HALF_KERNEL_SIZE - 1 - (kernel_index + HALF_KERNEL_SIZE / 2)] as i32;
                     (s1 * p1 + s2 * p2 + s3 * p3 + s4 * p4) >> 11
                 },
-                ResamplingMode::AccurateGaussian => {
+                ResamplingMode::Accurate => {
                     let kernel_index = (self.sample_pos >> 4) as usize;
                     let p1 = self.accurate_gaussian_table[255 - kernel_index] as i32;
                     let p2 = self.accurate_gaussian_table[511 - kernel_index] as i32;
@@ -327,7 +328,7 @@ impl Voice {
 
     fn read_next_sample(&mut self) {
         if self.brr_decoder.needs_more_samples() {
-            assert!(self.sample_offset < 7, "OOB sample access: offset={}", self.sample_offset);
+            debug_assert!(self.sample_offset < 7, "OOB sample access: offset={}", self.sample_offset);
             let buf = vec![
                 self.emulator().read_u8(self.sample_address + self.sample_offset + 1),
                 self.emulator().read_u8(self.sample_address + self.sample_offset + 2)

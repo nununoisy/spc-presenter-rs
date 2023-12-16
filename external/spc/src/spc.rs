@@ -1,28 +1,15 @@
-extern crate encoding_rs;
-
 use std::char;
-use std::str;
 use std::io::{Read, Result, Error, ErrorKind, Seek, SeekFrom, BufReader};
 use std::path::Path;
 use std::fs::File;
+use std::time::Duration;
 use super::binary_reader::{ReadAll, BinaryRead, BinaryReader};
-use self::encoding_rs::{CoderResult, SHIFT_JIS};
+use super::string_decoder::decode_string;
 
 macro_rules! fail {
-    ($expr:expr) => (return Err(Error::new(ErrorKind::Other, $expr)))
-}
-
-pub fn decode_shift_jis(s: &[u8]) -> Option<String> {
-    let mut decoder = SHIFT_JIS.new_decoder();
-    let mut result = String::new();
-    result.reserve(s.len() * 4);  // Probably way more than ever needed but better safe than sorry
-
-    let (coder_result, _bytes_read, did_replacements) = decoder.decode_to_string(s, &mut result, true);
-    if coder_result == CoderResult::OutputFull || did_replacements {
-        return None;
+    ($expr:expr) => {
+        return Err(Error::new(ErrorKind::Other, $expr))
     }
-
-    Some(result)
 }
 
 pub const RAM_LEN: usize = 0x10000;
@@ -100,22 +87,27 @@ impl Spc {
         r.seek(SeekFrom::Start(0x101c0))?;
         let mut ipl_rom = [0; IPL_ROM_LEN];
         r.read_all(&mut ipl_rom)?;
+        let mut extended_id666_data: Vec<u8> = Vec::new();
+        r.read_to_end(&mut extended_id666_data)?;
 
         Ok(Spc {
-            version_minor: version_minor,
-            pc: pc,
-            a: a,
-            x: x,
-            y: y,
-            psw: psw,
-            sp: sp,
-            id666_tag: id666_tag,
-            ram: ram,
-            regs: regs,
-            ipl_rom: ipl_rom
+            version_minor,
+            pc,
+            a,
+            x,
+            y,
+            psw,
+            sp,
+            id666_tag,
+            ram,
+            regs,
+            ipl_rom
         })
     }
 }
+
+const DEFAULT_PLAY_TIME_SEC: i32 = 120;
+const DEFAULT_FADEOUT_TIME_MS: i32 = 10000;
 
 pub struct Id666Tag {
     pub song_title: String,
@@ -123,8 +115,8 @@ pub struct Id666Tag {
     pub dumper_name: String,
     pub comments: String,
     pub date_dumped: String,
-    pub seconds_to_play_before_fading_out: i32,
-    pub fade_out_length: i32,
+    pub play_time: Duration,
+    pub fadeout_time: Duration,
     pub artist_name: String,
     pub default_channel_disables: u8,
     pub dumping_emulator: Emulator
@@ -146,7 +138,7 @@ impl Id666Tag {
         // So, apparently, there's really no reliable way to detect whether or not
         //  an id666 tag is in text or binary format. I tried using the date field,
         //  but that's actually invalid in a lot of files anyways. I've read that
-        //  the dumping emu can give clues (znes seems to dump binary files and
+        //  the dumping emu can give clues (zsnes seems to dump binary files and
         //  snes9x seems to dump text), but these don't cover cases where the
         //  dumping emu is "unknown", so that sucks too. I've even seen some source
         //  where people try to differentiate based on the value of the psw register
@@ -165,13 +157,13 @@ impl Id666Tag {
 
         r.seek(SeekFrom::Start(0x9e))?;
 
-        let (date_dumped, seconds_to_play_before_fading_out, fade_out_length) =
+        let (date_dumped, play_time_sec, fadeout_ms) =
             if is_text_format {
                 let date_dumped = Id666Tag::read_string(r, 11)?;
-                let seconds_to_play_before_fading_out = Id666Tag::read_number(r, 3)?;
-                let fade_out_length = Id666Tag::read_number(r, 5)?;
+                let play_time_sec = Id666Tag::read_number(r, 3, DEFAULT_PLAY_TIME_SEC)?;
+                let fadeout_ms = Id666Tag::read_number(r, 5, DEFAULT_FADEOUT_TIME_MS)?;
 
-                (date_dumped, seconds_to_play_before_fading_out, fade_out_length)
+                (date_dumped, play_time_sec, fadeout_ms)
             } else {
                 let year = r.read_le_u16()?;
                 let month = r.read_u8()?;
@@ -179,33 +171,33 @@ impl Id666Tag {
                 let date_dumped = format!("{}/{}/{}", month, day, year);
 
                 r.seek(SeekFrom::Start(0xa9))?;
-                let seconds_to_play_before_fading_out = Id666Tag::read_number(r, 3)?;
-                let fade_out_length = Id666Tag::read_number(r, 4)?;
+                let play_time_sec = Id666Tag::read_number(r, 3, DEFAULT_PLAY_TIME_SEC)?;
+                let fadeout_ms = Id666Tag::read_number(r, 4, DEFAULT_FADEOUT_TIME_MS)?;
 
-                (date_dumped, seconds_to_play_before_fading_out, fade_out_length)
+                (date_dumped, play_time_sec, fadeout_ms)
             };
 
         let artist_name = Id666Tag::read_string(r, 32)?;
 
         let default_channel_disables = r.read_u8()?;
 
-        let dumping_emulator = match Id666Tag::read_digit(r) {
-            Ok(1) => Emulator::ZSnes,
-            Ok(2) => Emulator::Snes9x,
+        let dumping_emulator = match Id666Tag::read_number(r, 1, 0)? {
+            1 => Emulator::ZSnes,
+            2 => Emulator::Snes9x,
             _ => Emulator::Unknown
         };
 
         Ok(Id666Tag {
-            song_title: song_title,
-            game_title: game_title,
-            dumper_name: dumper_name,
-            comments: comments,
-            date_dumped: date_dumped,
-            seconds_to_play_before_fading_out: seconds_to_play_before_fading_out,
-            fade_out_length: fade_out_length,
-            artist_name: artist_name,
-            default_channel_disables: default_channel_disables,
-            dumping_emulator: dumping_emulator
+            song_title,
+            game_title,
+            dumper_name,
+            comments,
+            date_dumped,
+            play_time: Duration::from_secs(play_time_sec as u64),
+            fadeout_time: Duration::from_millis(fadeout_ms as u64),
+            artist_name,
+            default_channel_disables,
+            dumping_emulator
         })
     }
 
@@ -219,13 +211,7 @@ impl Id666Tag {
             .position(|b| *b == 0)
             .unwrap_or(max_len as usize);
 
-        if let Some(shift_jis) = decode_shift_jis(&string_bytes[..end]) {
-            return Ok(shift_jis);
-        }
-        match str::from_utf8(&string_bytes[..end]) {
-            Ok(s) => Ok(s.to_string()),
-            Err(e) => Err(Error::new(ErrorKind::InvalidData, e))
-        }
+        decode_string(&string_bytes[..end])
     }
 
     fn is_text_region<R: BinaryRead>(r: &mut R, len: i32) -> Result<bool> {
@@ -246,28 +232,13 @@ impl Id666Tag {
         )
     }
 
-    fn read_digit<R: BinaryRead>(r: &mut R) -> Result<i32> {
-        let d = r.read_u8()?;
-        Id666Tag::digit(d)
-    }
+    fn read_number<R: BinaryRead>(r: &mut R, max_len: i32, default: i32) -> Result<i32> {
+        let num_string = Id666Tag::read_string(r, max_len)?;
 
-    fn digit(d: u8) -> Result<i32> {
-        match char::from_u32(d as u32) {
-            Some(c) if c.is_digit(10) => Ok(c.to_digit(10).unwrap() as i32),
-            _ => fail!("Expected numeric value")
+        match i32::from_str_radix(&num_string, 10) {
+            Ok(0) => Ok(default),
+            Ok(result) => Ok(result),
+            Err(e) => fail!(e)
         }
-    }
-
-    fn read_number<R: BinaryRead>(r: &mut R, max_len: i32) -> Result<i32> {
-        let mut ret = 0;
-        for _ in 0..max_len {
-        let d = r.read_u8()?;
-            if d == 0 {
-                break;
-            }
-            ret *= 10;
-            ret += Id666Tag::digit(d)?;
-        }
-        Ok(ret)
     }
 }

@@ -1,15 +1,18 @@
 mod snes_apu;
 mod resampler;
 mod filter;
+mod brr_sample;
 
 use anyhow::{Result};
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::path::Path;
 use std::rc::Rc;
-use spc::spc::{Id666Tag, Spc};
+use spc::spc::Spc;
 use snes_apu::apu::Apu;
 pub use snes_apu::dsp::voice::ResamplingMode;
+pub use brr_sample::BrrSample;
+use crate::emulator::brr_sample::BrrSampleBuilder;
 
 pub trait ApuStateReceiver {
     fn receive(
@@ -18,7 +21,7 @@ pub trait ApuStateReceiver {
         source: u8,
         muted: bool,
         envelope_level: i32,
-        volume: (u8, u8),
+        volume: (i8, i8),
         amplitude: (i32, i32),
         pitch: u16,
         noise_clock: Option<u8>,
@@ -122,8 +125,8 @@ impl Emulator {
         let title = self.spc_file.id666_tag.as_ref().unwrap().song_title.clone();
         let artist = self.spc_file.id666_tag.as_ref().unwrap().artist_name.clone();
         let game = self.spc_file.id666_tag.as_ref().unwrap().game_title.clone();
-        let duration_frames = 60 * (self.spc_file.id666_tag.as_ref().unwrap().seconds_to_play_before_fading_out as u64);
-        let fadeout_frames = 60 * (self.spc_file.id666_tag.as_ref().unwrap().fade_out_length as u64) / 1000;
+        let duration_frames = (60.0 * self.spc_file.id666_tag.as_ref().unwrap().play_time.as_secs_f64()).round() as u64;
+        let fadeout_frames = (60.0 * self.spc_file.id666_tag.as_ref().unwrap().fadeout_time.as_secs_f64()).round() as u64;
 
         Some(SpcMetadata {
             title,
@@ -134,7 +137,40 @@ impl Emulator {
         })
     }
 
-    pub fn dump_sample(&mut self, source: u8, sample_count: usize) -> (Vec<i16>, usize, usize) {
-        self.apu.dump_sample(source, sample_count)
+    pub fn dump_sample(&mut self, source: u8) -> BrrSample {
+        let mut result = BrrSampleBuilder::new();
+
+        let mut sample_address = self.apu.dsp.as_ref().unwrap().read_source_dir_start_address(source as i32);
+        let loop_address = self.apu.dsp.as_ref().unwrap().read_source_dir_loop_address(source as i32);
+        let mut did_loop = false;
+        let mut buf = [0u8; 9];
+
+        loop {
+            for i in 0..9 {
+                buf[i] = self.apu.read_u8(sample_address + i as u32);
+            }
+            sample_address += 9;
+
+            let loop_flag = (buf[0] & 0b0000_0010) != 0;
+            let end_flag = (buf[0] & 0b0000_0001) != 0;
+
+            if did_loop {
+                result.add_loop_block(&buf);
+            } else {
+                result.add_start_block(&buf);
+            }
+
+            if end_flag {
+                if loop_flag && !did_loop {
+                    sample_address = loop_address;
+                    did_loop = true;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        result.simplify();
+        result.into_inner()
     }
 }

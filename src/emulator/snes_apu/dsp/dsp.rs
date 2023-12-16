@@ -1,8 +1,6 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 use crate::emulator::ApuStateReceiver;
-use crate::emulator::snes_apu::dsp::pitch_detection::VoicePitch;
 use super::super::apu::Apu;
 use super::voice::{Voice, ResamplingMode};
 use super::filter::Filter;
@@ -57,8 +55,7 @@ pub struct Dsp {
 
     resampling_mode: ResamplingMode,
 
-    pub state_receiver: Option<Rc<RefCell<dyn ApuStateReceiver>>>,
-    pub source_pitches: HashMap<u8, VoicePitch>
+    pub state_receiver: Option<Rc<RefCell<dyn ApuStateReceiver>>>
 }
 
 impl Dsp {
@@ -96,8 +93,7 @@ impl Dsp {
 
             resampling_mode: resampling_mode,
 
-            state_receiver: None,
-            source_pitches: HashMap::new()
+            state_receiver: None
         });
         let ret_ptr = &mut *ret as *mut _;
         for _ in 0..NUM_VOICES {
@@ -242,47 +238,13 @@ impl Dsp {
 
             if self.state_receiver.is_some() {
                 for channel in 0..NUM_VOICES {
-                    // Need to do this first to avoid double mutable borrow
-                    // let (source_pitch, source_loudness) = self.detect_voice_pitch(channel);
-                    //
-                    // let voice = self.voices.get_mut(channel).unwrap();
-                    //
-                    // let volume = {
-                    //     if voice.is_muted {
-                    //         0u8
-                    //     } else {
-                    //         (source_loudness * 2.8 * (((voice.vol_left as f64 / 2.0) + (voice.vol_right as f64 / 2.0)).abs() / 3.0 + 1.0).log2() * (voice.envelope.level as f64 / 2047.0)).ceil() as u8
-                    //     }
-                    // };
-                    // let timbre = voice.source as usize;
-                    // let balance = ((voice.vol_left as f64).abs() / -128.0) + ((voice.vol_right as f64).abs() / 128.0) + 0.5;
-                    // let edge = voice.edge_detected();
-                    //
-                    // let l_last_sample = voice.output_buffer.read().left_out;
-                    // let r_last_sample = voice.output_buffer.read().right_out;
-                    // let amplitude = {
-                    //     if (voice.vol_left as i8) < 0 && (voice.vol_right as i8) > 0 {
-                    //         ((r_last_sample - l_last_sample) / 2) as i16
-                    //     } else if (voice.vol_left as i8) > 0 && (voice.vol_right as i8) < 0 {
-                    //         ((l_last_sample - r_last_sample) / 2) as i16
-                    //     } else {
-                    //         ((l_last_sample + r_last_sample) / 2) as i16
-                    //     }
-                    // };
-                    //
-                    // let frequency = match voice.noise_on {
-                    //     true => source_pitch,
-                    //     false => source_pitch * (voice.pitch() as f64) / (0x1000 as f64)
-                    // }.max(f64::EPSILON);
-                    // let kon_frames = voice.get_sample_frame();
-
                     let voice = self.voices.get_mut(channel).unwrap();
                     let last_sample = voice.output_buffer.read();
 
                     let source = voice.source;
                     let muted = voice.is_muted;
                     let envelope_level = voice.envelope.level;
-                    let volume = (voice.vol_left, voice.vol_right);
+                    let volume = (voice.vol_left as i8, voice.vol_right as i8);
                     let amplitude = (last_sample.left_out, last_sample.right_out);
                     let pitch = voice.pitch();
                     let noise_clock = voice.noise_on.then_some(self.noise_clock);
@@ -511,7 +473,7 @@ impl Dsp {
         let mut result = 0u8;
         for i in 0..NUM_VOICES {
             if self.voices[i].get_endx_bit() {
-                result |= (1 << (i as u8));
+                result |= 1 << (i as u8);
             }
         }
         result

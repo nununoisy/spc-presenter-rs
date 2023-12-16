@@ -1,5 +1,7 @@
-import { VerticalBox, ComboBox, CheckBox, Button, StandardButton, LineEdit, ListView } from "std-widgets.slint";
+import { VerticalBox, ComboBox, CheckBox, Button, StandardButton, LineEdit, ListView, Slider } from "std-widgets.slint";
 import { ColorPickerButton } from "./color-picker.slint";
+import { PianoKeys } from "./piano-keys.slint";
+import { ToolbarButton } from "./toolbar-button.slint";
 
 export global SampleUtils {
     pure callback format-hex(int) -> string;
@@ -15,6 +17,7 @@ export struct SampleConfig {
     name: string,
     source: int,
     pitch-type: PitchType,
+    base-frequency: float,
     frequency: float,
     amk-tuning: int,
     amk-subtuning: int,
@@ -25,6 +28,7 @@ export struct SampleConfig {
 export component SampleConfigWidget {
     in-out property <[SampleConfig]> sample-configs: [];
     in property <bool> enabled: true;
+    in property <bool> open: true;
 
     property <int> selected-sample-index: -1;
 
@@ -39,12 +43,28 @@ export component SampleConfigWidget {
     property <[int]> i-color: [0, 0, 0];
     property <bool> i-use-color: false;
 
+    property <float> i-sample-preview-pitch: 4096;
+    property <string> i-sample-preview-pitch-text: "$1000";
+    property <int> i-piano-base-octave: 3;
+    property <bool> i-audio-playing: false;
+
     callback play-audio(SampleConfig) -> bool;
     callback stop-audio();
+    callback change-audio-pitch(SampleConfig, int) -> int;
+    callback dump-sample(SampleConfig);
 
     public function reset() {
-        root.stop-audio();
         root.selected-sample-index = -1;
+
+        root.stop-audio();
+        root.i-audio-playing = false;
+        root.i-sample-preview-pitch = 4096;
+        root.i-sample-preview-pitch-text = "$1000";
+        root.i-piano-base-octave = 3;
+    }
+
+    public function audio-stopped() {
+        root.i-audio-playing = false;
     }
 
     function i-update-pitch-type() {
@@ -75,6 +95,10 @@ export component SampleConfigWidget {
 
     function i-switch-selected-sample() {
         root.stop-audio();
+        root.i-audio-playing = false;
+        root.i-sample-preview-pitch = 4096;
+        root.i-sample-preview-pitch-text = "$1000";
+        root.i-piano-base-octave = 3;
         if (root.selected-sample-index != -1) {
             root.i-name = root.sample-configs[root.selected-sample-index].name;
             root.i-source = root.sample-configs[root.selected-sample-index].source;
@@ -88,43 +112,52 @@ export component SampleConfigWidget {
         }
     }
 
+    function i-change-pitch(pitch: int) {
+        if (root.selected-sample-index != -1) {
+            root.i-sample-preview-pitch = root.change-audio-pitch(root.sample-configs[root.selected-sample-index], Math.round(pitch));
+            root.i-sample-preview-pitch-text = SampleUtils.format-hex(Math.round(root.i-sample-preview-pitch));
+        }
+    }
+
     HorizontalLayout {
         alignment: stretch;
         padding: 0;
 
-        VerticalBox {
+        if root.open: VerticalBox {
             width: 120px;
+            z: -5;
 
             ListView {
-                height: 120px;
+                height: 180px;
 
                 for sample-config[i] in root.sample-configs: Rectangle {
-                    height: 20px;
-                    background: i == root.selected-sample-index ? (root.enabled ? #60cdff : #313131) : transparent;
+                    height: 28px;
+                    background: i == root.selected-sample-index
+                        ? #60cdff
+                        : (i-touch-area.has-hover ? #ffffff1f : transparent);
+                    border-radius: 4px;
 
                     Text {
                         text: SampleUtils.format-hex(sample-config.source);
-                        color: (i == root.selected-sample-index && root.enabled) ? #000000 : #ffffff;
+                        color: i == root.selected-sample-index ? #000000 : #ffffff;
                     }
 
-                    TouchArea {
+                    i-touch-area := TouchArea {
                         x: 0;
                         y: 0;
                         width: parent.width;
                         height: parent.height;
 
                         clicked => {
-                            if (root.enabled) {
-                                root.selected-sample-index = i;
-                                root.i-switch-selected-sample();
-                            }
+                            root.selected-sample-index = i;
+                            root.i-switch-selected-sample();
                         }
                     }
                 }
             }
         }
         
-        if root.selected-sample-index == -1: VerticalBox {
+        if root.selected-sample-index == -1 && root.open: VerticalBox {
             horizontal-stretch: 1.0;
             alignment: stretch;
             spacing: 12px;
@@ -136,14 +169,15 @@ export component SampleConfigWidget {
             }
         }
 
-        if root.selected-sample-index != -1: VerticalBox {
+        if root.selected-sample-index != -1 && root.open: VerticalBox {
             horizontal-stretch: 1.0;
             alignment: start;
             spacing: 12px;
+            padding: 0;
 
             HorizontalLayout {
                 alignment: stretch;
-                spacing: 8px;
+                spacing: 12px;
 
                 Text {
                     text: "Sample " + SampleUtils.format-hex(root.i-source) + ": " + root.i-name;
@@ -152,15 +186,75 @@ export component SampleConfigWidget {
                 Rectangle {
                     horizontal-stretch: 1.0;
                 }
+                ToolbarButton {
+                    horizontal-stretch: 0.0;
+                    icon: @image-url("save.svg");
+                    text: "Dump";
+                    clicked => {
+                        if (root.selected-sample-index != -1) {
+                            root.dump-sample(root.sample-configs[root.selected-sample-index]);
+                        }
+                    }
+                }
+            }
+            HorizontalLayout {
+                alignment: stretch;
+                spacing: 4px;
+
+                ToolbarButton {
+                    icon: @image-url("8vb.svg");
+                    tooltip: "Decrease preview octave";
+                    clicked => {
+                        if (root.i-piano-base-octave > 0) {
+                            root.i-piano-base-octave = root.i-piano-base-octave - 1;
+                        }
+                    }
+                }
+                PianoKeys {
+                    octaves: [root.i-piano-base-octave, root.i-piano-base-octave + 1];
+                    changed(note) => {
+                        if (note != -1) {
+                            root.i-change-pitch(-note);
+                            if (!root.i-audio-playing && root.selected-sample-index != -1) {
+                                root.i-audio-playing = root.play-audio(root.sample-configs[root.selected-sample-index]);
+                            }
+                        } else {
+                            root.stop-audio();
+                            root.i-audio-playing = false;
+                        }
+                    }
+                }
+                ToolbarButton {
+                    icon: @image-url("8va.svg");
+                    tooltip: "Increase preview octave";
+                    clicked => {
+                        if (root.i-piano-base-octave < 7) {
+                            root.i-piano-base-octave = root.i-piano-base-octave + 1;
+                        }
+                    }
+                }
+                LineEdit {
+                    text <=> root.i-sample-preview-pitch-text;
+                    width: 54px;
+                    accepted => {
+                        if (SampleUtils.is-hex(root.i-sample-preview-pitch-text)) {
+                            root.i-change-pitch(SampleUtils.parse-hex(root.i-sample-preview-pitch-text));
+                            if (!root.i-audio-playing && root.selected-sample-index != -1) {
+                                root.i-audio-playing = root.play-audio(root.sample-configs[root.selected-sample-index]);
+                            }
+                        }
+                    }
+                }
                 Button {
                     icon: self.checked ? @image-url("stop.svg") : @image-url("play.svg");
                     checkable: true;
+                    checked <=> root.i-audio-playing;
                     clicked => {
-                        if (self.checked && root.selected-sample-index != -1) {
-                            self.checked = root.play-audio(root.sample-configs[root.selected-sample-index]);
+                        if (root.i-audio-playing && root.selected-sample-index != -1) {
+                            root.i-audio-playing = root.play-audio(root.sample-configs[root.selected-sample-index]);
                         } else {
                             root.stop-audio();
-                            self.checked = false;
+                            root.i-audio-playing = false;
                         }
                     }
                 }
@@ -169,6 +263,7 @@ export component SampleConfigWidget {
             HorizontalLayout {
                 alignment: stretch;
                 spacing: 6px;
+                z: -5;
 
                 Text {
                     text: "Pitch:";
@@ -190,6 +285,7 @@ export component SampleConfigWidget {
                 if root.i-pitch-type == PitchType.Frequency: LineEdit {
                     text <=> root.i-frequency;
                     enabled: root.enabled;
+                    width: 120px;
                     edited => {
                         if (root.i-frequency.is-float() && root.selected-sample-index != -1) {
                             root.sample-configs[root.selected-sample-index].frequency = root.i-frequency.to-float();
@@ -201,28 +297,22 @@ export component SampleConfigWidget {
                     vertical-alignment: center;
                 }
 
-                if root.i-pitch-type == PitchType.AddMusicK: Text {
-                    text: "Tuning:";
-                    vertical-alignment: center;
-                }
                 if root.i-pitch-type == PitchType.AddMusicK: LineEdit {
                     text <=> root.i-amk-tuning;
+                    placeholder-text: "Tuning";
                     enabled: root.enabled;
-                    width: 50px;
+                    width: 60px;
                     edited => {
                         if (SampleUtils.is-hex(root.i-amk-tuning) && root.selected-sample-index != -1) {
                             root.sample-configs[root.selected-sample-index].amk-tuning = SampleUtils.parse-hex(root.i-amk-tuning);
                         }
                     }
                 }
-                if root.i-pitch-type == PitchType.AddMusicK: Text {
-                    text: "Subtuning:";
-                    vertical-alignment: center;
-                }
                 if root.i-pitch-type == PitchType.AddMusicK: LineEdit {
                     text <=> root.i-amk-subtuning;
+                    placeholder-text: "Sub.";
                     enabled: root.enabled;
-                    width: 50px;
+                    width: 60px;
                     edited => {
                         if (SampleUtils.is-hex(root.i-amk-subtuning) && root.selected-sample-index != -1) {
                             root.sample-configs[root.selected-sample-index].amk-subtuning = SampleUtils.parse-hex(root.i-amk-subtuning);

@@ -2,10 +2,9 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::ffi::OsStr;
 use tiny_skia::Color;
-use crate::emulator::ResamplingMode;
+use crate::config::Config;
 use crate::sample_processing::SampleData;
 use crate::video_builder::video_options::VideoOptions;
-use crate::visualizer::channel_settings::ChannelSettings;
 
 pub const FRAME_RATE: i32 = 60;
 
@@ -73,11 +72,9 @@ pub struct RendererOptions {
     pub stop_condition: StopCondition,
     pub fadeout_length: u64,
 
-    pub channel_base_colors: Vec<Color>,
+    pub config: Config,
     pub sample_tunings: HashMap<u8, SampleData>,
-    pub per_sample_colors: HashMap<u8, Color>,
-    pub filter_enabled: bool,
-    pub resampling_mode: ResamplingMode
+    pub per_sample_colors: HashMap<u8, Color>
 }
 
 impl Default for RendererOptions {
@@ -105,11 +102,9 @@ impl Default for RendererOptions {
             },
             stop_condition: StopCondition::Frames(300 * FRAME_RATE as u64),
             fadeout_length: 180,
-            channel_base_colors: Vec::new(),
+            config: Config::default(),
             sample_tunings: HashMap::new(),
-            per_sample_colors: HashMap::new(),
-            filter_enabled: true,
-            resampling_mode: ResamplingMode::AccurateGaussian
+            per_sample_colors: HashMap::new()
         }
     }
 }

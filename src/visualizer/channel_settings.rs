@@ -91,33 +91,6 @@ impl ChannelSettingsManager {
             .find(|settings| settings.chip().as_str() == chip && settings.name().as_str() == channel)
     }
 
-    pub fn to_map(&self) -> HashMap<(String, String), ChannelSettings> {
-        let mut result: HashMap<(String, String), ChannelSettings> = HashMap::new();
-
-        for settings in self.0.iter() {
-            result.insert((settings.chip(), settings.name()), settings.clone());
-        }
-
-        result
-    }
-
-    pub fn apply_from_map(&mut self, map: &HashMap<(String, String), ChannelSettings>) {
-        for ((chip, channel), settings) in map {
-            match self.settings_mut_by_name(chip.as_str(), channel.as_str()) {
-                Some(inner_settings) => {
-                    debug_assert_eq!(inner_settings.chip(), chip.clone());
-                    debug_assert_eq!(inner_settings.name(), channel.clone());
-
-                    inner_settings.set_colors(&settings.colors());
-                    inner_settings.set_hidden(settings.hidden());
-                },
-                None => {
-                    unimplemented!()
-                }
-            }
-        }
-    }
-
     pub fn put_per_sample_colors(&mut self, sample_colors: HashMap<u8, Color>) {
         for settings in self.0.iter_mut() {
             let base_color = settings.colors().first().cloned().unwrap_or(Color::from_rgba8(0xFF, 0xA0, 0xA0, 0xFF));
@@ -180,15 +153,9 @@ impl Serialize for ChannelSettingsManager {
                 colors: BTreeMap::from_iter(
                     channel_settings.colors()
                         .iter()
-                        .enumerate()
-                        .filter_map(|(i, c)| {
+                        .map(|c| {
                             let css_color = CssColor::new(c.red() as _, c.green() as _, c.blue() as _, c.alpha() as _);
-                            match channel_settings.name().as_str() {
-                                "Pulse 1" | "Pulse 2" => (i < 4).then(|| (format!("duty{:X}", i), css_color)),
-                                "Wave" => (i < 6).then(|| (format!("wave{:X}", i), css_color)),
-                                "Noise" => (i < 2).then(|| (format!("mode{:X}", i), css_color)),
-                                _ => None
-                            }
+                            ("static".to_string(), css_color)
                         })
                 )
             };
