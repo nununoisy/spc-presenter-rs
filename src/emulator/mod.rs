@@ -142,6 +142,7 @@ impl Emulator {
 
         let mut sample_address = self.apu.dsp.as_ref().unwrap().read_source_dir_start_address(source as i32);
         let loop_address = self.apu.dsp.as_ref().unwrap().read_source_dir_loop_address(source as i32);
+        println!("Dumping sample ${:x}, start=${:04x}, loop=${:04x}", source, sample_address, loop_address);
         let mut did_loop = false;
         let mut buf = [0u8; 9];
 

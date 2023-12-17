@@ -124,7 +124,7 @@ impl Envelope {
                 self.hidden_level = env; // Super obscure quirk thingy here
 
                 // Unsigned because env < 0 should also trigger this logic
-                if (env as u32) >= 0x07ff {
+                if (env as u32) > 0x07ff {
                     env = if env < 0 { 0 } else { 0x07ff };
                     if let Mode::Attack = self.mode {
                         self.mode = Mode::Decay;

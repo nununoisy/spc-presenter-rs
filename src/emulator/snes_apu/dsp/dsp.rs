@@ -20,7 +20,7 @@ static COUNTER_RATES: [i32; 32] = [
     80, 64, 48, 40, 32, 24, 20, 16, 12, 10, 8, 6, 5, 4, 3, 2, 1];
 
 static COUNTER_OFFSETS: [i32; 32] = [
-    1, 0, 1040, 536, 0, 1040, 536, 0, 1040, 536, 0, 1040, 536, 0, 1040,
+    0, 0, 1040, 536, 0, 1040, 536, 0, 1040, 536, 0, 1040, 536, 0, 1040,
     536, 0, 1040, 536, 0, 1040, 536, 0, 1040, 536, 0, 1040, 536, 0, 1040, 0, 0];
 
 pub struct Dsp {
@@ -233,7 +233,10 @@ impl Dsp {
                 self.echo_pos = 0;
             }
 
-            self.counter = (self.counter + 1) % COUNTER_RANGE;
+            if self.counter == 0 {
+                self.counter = COUNTER_RANGE;
+            }
+            self.counter -= 1;
             self.cycles_since_last_flush -= 64;
 
             if self.state_receiver.is_some() {
@@ -409,7 +412,7 @@ impl Dsp {
 
     fn get_flg(&self) -> u8 {
         let mut result = self.noise_clock;
-        if self.echo_write_enabled {
+        if !self.echo_write_enabled {
             result |= 0x20;
         }
         result

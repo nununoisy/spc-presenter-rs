@@ -153,6 +153,10 @@ impl Apu {
 
     pub fn clear_echo_buffer(&mut self) {
         let dsp = self.dsp.as_mut().unwrap();
+        // Check FLG to see if echo writes are already enabled, and skip clearing if they are.
+        if (dsp.get_register(0x6c) & 0x20) != 0 {
+            return;
+        }
         let length = dsp.calculate_echo_length();
         let mut end_addr = dsp.get_echo_start_address() as i32 + length;
         if end_addr > RAM_LEN as i32 {

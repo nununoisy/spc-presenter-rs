@@ -101,8 +101,8 @@ pub struct Voice {
 impl Voice {
     pub fn new(dsp: *mut Dsp, emulator: *mut Apu, resampling_mode: ResamplingMode) -> Voice {
         Voice {
-            dsp: dsp,
-            emulator: emulator,
+            dsp,
+            emulator,
 
             envelope: Envelope::new(dsp),
 
@@ -130,7 +130,7 @@ impl Voice {
             outx_value: 0,
             kon_delay: 0,
 
-            resampling_mode: resampling_mode,
+            resampling_mode,
             resample_buffer: [0; RESAMPLE_BUFFER_LEN],
             resample_buffer_pos: 0,
             accurate_gaussian_table: construct_accurate_gaussian_table(),
@@ -218,7 +218,7 @@ impl Voice {
         sample = ((sample * env_level) >> 11) & !1;
         self.outx_value = ((sample >> 8) as i8) as u8;
 
-        if self.kon_delay < 5 && self.brr_decoder.is_end && !self.brr_decoder.is_looping {
+        if (self.brr_decoder.is_end && !self.brr_decoder.is_looping) || self.is_muted {
             self.envelope.key_off();
             self.envelope.level = 0;
         }
@@ -303,7 +303,7 @@ impl Voice {
         self.sample_frame = 0;
         self.endx_bit = false;
         self.endx_latch = false;
-        self.kon_delay = 5;
+        self.kon_delay = 6;
     }
 
     pub fn key_off(&mut self) {
