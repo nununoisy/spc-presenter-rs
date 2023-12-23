@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
+use anyhow::Result;
 use indicatif::{FormattedDuration, HumanBytes, HumanDuration};
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 use slint;
@@ -167,27 +168,23 @@ fn parse_hex(s: slint::SharedString) -> Option<u16> {
     }
 }
 
-fn get_spc_metadata<P: AsRef<Path>>(spc_path: P) -> (bool, Option<Duration>, slint::ModelRc<slint::SharedString>) {
-    let (spc_valid, duration, lines) = match spc::spc::Spc::load(spc_path) {
-        Ok(spc_file) => {
-            match spc_file.id666_tag {
-                Some(metadata) => (
-                    true,
-                    Some(metadata.play_time),
-                    vec![
-                        metadata.song_title,
-                        metadata.artist_name,
-                        metadata.game_title,
-                        metadata.dumper_name
-                    ]
-                ),
-                None => (true, None, vec!["<no metadata>".to_string()])
-            }
-        },
-        _ => (false, None, vec!["<no metadata>".to_string()])
+fn get_spc_metadata<P: AsRef<Path>>(spc_path: P) -> Result<(Option<Duration>, slint::ModelRc<slint::SharedString>)> {
+    let spc_file = spc::spc::Spc::load(spc_path)?;
+
+    let (duration, lines) = match spc_file.id666_tag {
+        Some(metadata) => (
+            Some(metadata.play_time),
+            vec![
+                metadata.song_title,
+                metadata.artist_name,
+                metadata.game_title,
+                metadata.dumper_name
+            ]
+        ),
+        None => (None, vec!["<no metadata>".to_string()])
     };
 
-    (spc_valid, duration, slint_string_arr(lines))
+    Ok((duration, slint_string_arr(lines)))
 }
 
 fn random_slint_color() -> slint::ModelRc<i32> {
@@ -581,12 +578,13 @@ pub fn run() {
         main_window.on_browse_for_module(move || {
             match browse_for_module_dialog() {
                 Some(path) => {
-                    let (spc_valid, _duration, metadata_lines) = get_spc_metadata(&path);
-
-                    if !spc_valid {
-                        display_error_dialog("Invalid SPC file.");
-                        return options.lock().unwrap().input_path.clone().into();
-                    }
+                    let metadata_lines = match get_spc_metadata(&path) {
+                        Ok((_duration, metadata_lines)) => metadata_lines,
+                        Err(e) => {
+                            display_error_dialog(format!("Invalid SPC file: {}", e).as_str());
+                            return options.lock().unwrap().input_path.clone().into();
+                        }
+                    };
 
                     options.lock().unwrap().input_path = path.clone();
                     main_window_weak.unwrap().set_metadata_lines(metadata_lines);
@@ -638,11 +636,10 @@ pub fn run() {
                     Duration::from_secs(stop_condition_num as _)
                 },
                 StopConditionType::SpcDuration => {
-                    let (_spc_valid, duration, _metadata_lines) = get_spc_metadata(options.lock().unwrap().input_path.clone());
-                    if duration.is_none() {
-                        return "<error>".into();
+                    match get_spc_metadata(options.lock().unwrap().input_path.clone()) {
+                        Ok((Some(duration), _metadata_lines)) => duration,
+                        _ => return "<error>".into()
                     }
-                    duration.unwrap()
                 }
             };
             FormattedDuration(duration).to_string().into()
@@ -688,7 +685,7 @@ pub fn run() {
                     }
                 }
             } else {
-                display_error_dialog(format!("Unrecognized tuning data format.").as_str());
+                display_error_dialog("Unrecognized tuning data format.");
                 return;
             }
 

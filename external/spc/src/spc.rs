@@ -235,6 +235,11 @@ impl Id666Tag {
     fn read_number<R: BinaryRead>(r: &mut R, max_len: i32, default: i32) -> Result<i32> {
         let num_string = Id666Tag::read_string(r, max_len)?;
 
+        if num_string.is_empty() {
+            // Hack for some strangely-tagged SPCs
+            return Ok(default);
+        }
+
         match i32::from_str_radix(&num_string, 10) {
             Ok(0) => Ok(default),
             Ok(result) => Ok(result),

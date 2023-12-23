@@ -308,7 +308,6 @@ impl Voice {
 
     pub fn key_off(&mut self) {
         self.envelope.key_off();
-        self.edge_hit = true;
     }
 
     fn read_entry(&mut self) {

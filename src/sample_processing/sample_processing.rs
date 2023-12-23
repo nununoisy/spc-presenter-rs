@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::rc::Rc;
 use std::thread;
@@ -8,7 +8,7 @@ use anyhow::{Result, anyhow};
 use crate::emulator::{ApuStateReceiver, Emulator, BrrSample};
 use super::{sample_loudness, util, Yin};
 
-const F_MIN: f64 = 55.0;
+const F_MIN: f64 = 62.5;
 const F_MAX: f64 = 4000.0;
 const SAMPLE_RATE: f64 = 32000.0;
 const BASE_PITCH_TROUGH_THRESHOLD: f64 = 0.2;
@@ -24,31 +24,45 @@ pub struct SampleData {
     loudness: Vec<f64>
 }
 
-fn process_sample(signal: &[f64], start_block_count: usize, loop_block_count: usize) -> Result<(f64, f64)> {
-    let mut yin = Yin::new(F_MIN, F_MAX, SAMPLE_RATE, signal.len(), None, None)?;
-    let yin_result = yin.yin(signal, Some(BASE_PITCH_TROUGH_THRESHOLD));
-    let yin_result = yin_result
-        .get(0)
-        .ok_or(anyhow!("YIN did not return any results"))?;
-
-    if yin_result.voiced {
-        Ok((yin_result.f_0, yin_result.periodicity))
-    } else {
-        let mut period_blocks = match loop_block_count {
-            0 => start_block_count,
-            _ => loop_block_count
-        }.max(1);
-
-        while period_blocks > 16 {
-            period_blocks /= 2;
+impl Default for SampleData {
+    fn default() -> Self {
+        Self {
+            sample: BrrSample::new(),
+            base_pitch: 0.0,
+            temporal_pitch: vec![],
+            custom_pitch: None,
+            loudness: vec![]
         }
-
-        let f_0 = 32000.0 / (period_blocks * 16) as f64;
-
-        println!("WARNING: YIN did not return a suitable candidate! Assuming base period is {} BRR blocks (f_0={} Hz)", period_blocks, f_0);
-
-        Ok((f_0, 0.0))
     }
+}
+
+fn process_sample(signal: &[f64], start_block_count: usize, loop_block_count: usize) -> Result<(f64, f64)> {
+    if signal.len() >= 64 {
+        let mut yin = Yin::new(F_MIN, F_MAX, SAMPLE_RATE, signal.len(), None, None)?;
+        let yin_result = yin.yin(signal, Some(BASE_PITCH_TROUGH_THRESHOLD));
+        let yin_result = yin_result
+            .get(0)
+            .ok_or(anyhow!("YIN did not return any results"))?;
+
+        if yin_result.voiced {
+            return Ok((yin_result.f_0, yin_result.periodicity))
+        }
+    }
+
+    let mut period_blocks = match loop_block_count {
+        0 => start_block_count,
+        _ => loop_block_count
+    }.max(1);
+
+    while period_blocks > 16 {
+        period_blocks /= 2;
+    }
+
+    let f_0 = 32000.0 / (period_blocks * 16) as f64;
+
+    println!("WARNING: YIN did not return a suitable candidate! Assuming base period is {} BRR blocks (f_0={} Hz)", period_blocks, f_0);
+
+    Ok((f_0, 0.0))
 }
 
 fn process_sample_temporal(signal: &[f64], base_pitch: f64, base_clarity: f64) -> Result<(f64, f64, Vec<f64>, Vec<f64>)> {
@@ -77,11 +91,11 @@ fn process_sample_temporal(signal: &[f64], base_pitch: f64, base_clarity: f64) -
 }
 
 impl SampleData {
-    pub fn new(sample: BrrSample) -> Result<Self> {
+    pub fn new(sample: BrrSample, sample_count: usize) -> Result<Self> {
         let signal: Vec<f64> = sample
             .clone()
             .into_iter()
-            .take(32000 * 120)
+            .take(sample_count)
             .map(|x| x as f64)
             .collect();
 
@@ -132,15 +146,15 @@ pub enum SampleProcessorProgress {
     Finished
 }
 
-struct SampleDetector(HashSet<u8>);
+struct SampleDetector(HashMap<u8, usize>);
 
 impl SampleDetector {
     pub fn new() -> Self {
-        Self(HashSet::new())
+        Self(HashMap::new())
     }
 
-    pub fn sources(&mut self) -> Vec<u8> {
-        let result = self.0.iter().cloned().collect();
+    pub fn sources(&mut self) -> Vec<(u8, usize)> {
+        let result = self.0.clone().into_iter().collect();
         self.0.clear();
         result
     }
@@ -151,17 +165,27 @@ impl ApuStateReceiver for SampleDetector {
         &mut self,
         _channel: usize,
         source: u8,
-        _muted: bool,
+        muted: bool,
         _envelope_level: i32,
-        _volume: (i8, i8),
-        _amplitude: (i32, i32),
+        volume: (i8, i8),
+        amplitude: (i32, i32),
         _pitch: u16,
         _noise_clock: Option<u8>,
         _edge: bool,
         _kon_frames: usize,
-        _sample_block_index: usize
+        sample_block_index: usize
     ) {
-        self.0.insert(source);
+        if muted || (volume.0 == 0 && volume.1 == 0 && amplitude.0 == 0 && amplitude.1 == 0) {
+            return;
+        }
+
+        self.0.entry(source)
+            .and_modify(|last_block_index| {
+                if *last_block_index < sample_block_index + 1 {
+                    *last_block_index = sample_block_index + 1;
+                }
+            })
+            .or_insert(sample_block_index + 1);
     }
 }
 
@@ -172,7 +196,7 @@ pub struct SampleProcessor {
     current_sample: usize,
     sample_data: HashMap<u8, SampleData>,
     sample_detector: Rc<RefCell<SampleDetector>>,
-    detected_sources: HashSet<u8>,
+    detected_sources: HashMap<u8, usize>,
     processing_queue: VecDeque<(u8, BrrSample)>
 }
 
@@ -196,7 +220,7 @@ impl SampleProcessor {
             current_sample: 0,
             sample_data: HashMap::new(),
             sample_detector,
-            detected_sources: HashSet::new(),
+            detected_sources: HashMap::new(),
             processing_queue: VecDeque::new()
         })
     }
@@ -225,15 +249,18 @@ impl SampleProcessor {
             self.emulator.step()?;
             self.current_frame += 1;
 
-            for source in self.sample_detector.borrow_mut().sources() {
-                if self.detected_sources.contains(&source) {
+            for (source, max_length) in self.sample_detector.borrow_mut().sources() {
+                if let Some(last_max_length) = self.detected_sources.get_mut(&source) {
+                    if *last_max_length < max_length {
+                        *last_max_length = max_length;
+                    }
                     continue;
                 }
 
                 let sample = self.emulator.dump_sample(source);
                 println!("Discovered new sample ${:x}, length={}:{} blocks", source, sample.start_block_count(), sample.loop_block_count());
                 self.processing_queue.push_back((source, sample));
-                self.detected_sources.insert(source);
+                self.detected_sources.insert(source, max_length);
             }
 
             if self.current_frame >= self.total_frames {
@@ -242,8 +269,9 @@ impl SampleProcessor {
         } else {
             // Process detected samples
             if let Some((source, sample)) = self.processing_queue.pop_front() {
-                println!("Processing sample ${:x}...", source);
-                let sample_data = SampleData::new(sample)?;
+                let sample_count = (self.detected_sources.get(&source).cloned().unwrap_or(60000) + 2000) * 16;
+                println!("Processing sample ${:x} for {} samples...", source, sample_count);
+                let sample_data = SampleData::new(sample, sample_count)?;
                 self.sample_data.insert(source, sample_data);
                 self.current_sample += 1;
             }

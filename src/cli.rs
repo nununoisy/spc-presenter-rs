@@ -7,7 +7,9 @@ use std::fs;
 use std::str::FromStr;
 use csscolorparser::Color as CssColor;
 use tiny_skia::Color;
+use crate::config::Config;
 use crate::renderer::{Renderer, render_options::{RendererOptions, StopCondition}};
+use crate::sample_processing::{SampleProcessor, SampleProcessorProgress};
 use crate::tuning;
 
 fn codec_option_value_parser(s: &str) -> Result<(String, String)> {
@@ -128,6 +130,9 @@ fn get_renderer_options() -> RendererOptions {
         .arg(arg!(-B --"background" <BACKGROUND> "Set the output background")
             .required(false)
             .value_parser(value_parser!(PathBuf)))
+        .arg(arg!(-i --"import-config" <CONFIGFILE> "Import configuration from a RusticNES TOML file.")
+            .value_parser(value_parser!(PathBuf))
+            .required(false))
         .arg(arg!(<spc> "SPC to render")
             .value_parser(value_parser!(PathBuf))
             .required(true))
@@ -166,22 +171,42 @@ fn get_renderer_options() -> RendererOptions {
             options.video_options.audio_codec_params.insert(k, v);
         }
     }
+
+    options.config = match matches.get_one::<PathBuf>("import-config") {
+        Some(config_path) => {
+            let config = fs::read_to_string(config_path).expect("Failed to read config file!");
+            Config::from_toml(&config).expect("Failed to parse config file!")
+        },
+        None => Config::default()
+    };
+
+    let mut sample_processor = SampleProcessor::from_spc(options.input_path.clone()).expect("Failed to initialize sample processor");
+    loop {
+        match sample_processor.step().unwrap() {
+            SampleProcessorProgress::Finished => break,
+            _ => ()
+        }
+    }
+    options.sample_tunings = sample_processor.finish();
+
     if let Some(super_midi_pak_session_path) = matches.get_one::<PathBuf>("super-midi-pak-session").cloned() {
         let session_json = fs::read_to_string(super_midi_pak_session_path).unwrap();
         let session = tuning::super_midi_pak_session::SuperMidiPakSession::from_json(session_json.as_str()).unwrap();
         println!("Loaded Super MIDI Pak session version {}", session.version());
         for sample in session.samples().unwrap() {
             println!("Decoded sample: {}", &sample);
-            // if sample.pitch.is_some() {
-            //     options.manual_sample_tunings.insert(sample.source, sample.pitch.unwrap());
-            // }
+            if let Some(tuning) = options.sample_tunings.get_mut(&sample.source) {
+                tuning.set_custom_tuning(sample.pitch);
+            }
         }
     }
-    // if let Some(manual_tunings) = matches.get_many::<(u8, f64)>("manual-tune") {
-    //     for (sample_index, pitch) in manual_tunings.cloned() {
-    //         options.manual_sample_tunings.insert(sample_index, pitch);
-    //     }
-    // }
+    if let Some(manual_tunings) = matches.get_many::<(u8, f64)>("manual-tune") {
+        for (source, pitch) in manual_tunings.cloned() {
+            if let Some(tuning) = options.sample_tunings.get_mut(&source) {
+                tuning.set_custom_tuning(Some(pitch));
+            }
+        }
+    }
     if let Some(sample_colors) = matches.get_many::<(u8, Color)>("per-sample-color") {
         for (sample_index, color) in sample_colors.cloned() {
             options.per_sample_colors.insert(sample_index, color);

@@ -153,7 +153,7 @@ impl Apu {
 
     pub fn clear_echo_buffer(&mut self) {
         let dsp = self.dsp.as_mut().unwrap();
-        // Check FLG to see if echo writes are already enabled, and skip clearing if they are.
+        // Check FLG to see if echo writes are disabled, and skip clearing if they are.
         if (dsp.get_register(0x6c) & 0x20) != 0 {
             return;
         }
@@ -193,48 +193,4 @@ impl Apu {
         self.timers[1].set_start_stop_bit((value & 0x02) != 0);
         self.timers[2].set_start_stop_bit((value & 0x04) != 0);
     }
-
-    // pub fn dump_sample(&mut self, source: u8, sample_count: usize) -> (Vec<i16>, usize, usize) {
-    //     let mut decoded_sample: Vec<i16> = Vec::with_capacity(sample_count);
-    //
-    //     let mut sample_address = self.dsp.as_ref().unwrap().read_source_dir_start_address(source as i32);
-    //     let loop_address = self.dsp.as_ref().unwrap().read_source_dir_loop_address(source as i32);
-    //
-    //     let mut brr_block_decoder = BrrBlockDecoder::new();
-    //     let mut loop_count = 0;
-    //     let mut start_block_count = 0;
-    //     let mut loop_block_count = 0;
-    //     let mut buf = [0; 9];
-    //
-    //     brr_block_decoder.reset(0, 0);
-    //
-    //     loop {
-    //         for i in 0..9 {
-    //             buf[i] = self.read_u8(sample_address + i as u32);
-    //         }
-    //         brr_block_decoder.read(&buf);
-    //         sample_address += 9;
-    //
-    //         match loop_count {
-    //             0 => start_block_count += 1,
-    //             1 => loop_block_count += 1,
-    //             _ => ()
-    //         };
-    //
-    //         while !brr_block_decoder.is_finished() {
-    //             decoded_sample.push(brr_block_decoder.read_next_sample());
-    //         }
-    //
-    //         if brr_block_decoder.is_end {
-    //             if brr_block_decoder.is_looping && decoded_sample.len() < sample_count {
-    //                 sample_address = loop_address;
-    //                 loop_count += 1;
-    //             } else {
-    //                 break;
-    //             }
-    //         }
-    //     }
-    //
-    //     (decoded_sample, start_block_count, loop_block_count)
-    // }
 }

@@ -132,7 +132,11 @@ impl ApuStateReceiver for Visualizer {
         kon_frames: usize,
         sample_block_index: usize
     ) {
-        let sample_data = self.sample_data.get(&source).expect("Missing sample data!");
+        if !self.sample_data.contains_key(&source) {
+            self.sample_data.insert(source, SampleData::default());
+        }
+
+        let sample_data = self.sample_data.get(&source).unwrap();
         let source_pitch = sample_data.pitch_at(sample_block_index);
         let source_loudness = match noise_clock {
             Some(_) => 1.0,
