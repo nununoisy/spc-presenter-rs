@@ -56,5 +56,6 @@ fn main() {
     compile("src/gui/slint/piano-keys.slint");
     compile("src/gui/slint/color-picker.slint");
     compile("src/gui/slint/sample-config.slint");
+    compile("src/gui/slint/progress.slint");
     compile("src/gui/slint/main.slint");
 }

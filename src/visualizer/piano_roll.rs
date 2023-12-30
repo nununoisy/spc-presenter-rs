@@ -41,7 +41,8 @@ pub struct SliceState {
     pub color: Color,
     pub index: f32,
     pub width: f32,
-    pub height: f32
+    pub height: f32,
+    pub frame: usize
 }
 
 pub struct PianoRollState {
@@ -49,7 +50,8 @@ pub struct PianoRollState {
     samples_per_frame: f32,
     taken_samples: f32,
     starting_octave: f32,
-    volume_buf: Vec<f32>
+    volume_buf: Vec<f32>,
+    frame_count: usize
 }
 
 impl PianoRollState {
@@ -59,7 +61,8 @@ impl PianoRollState {
             samples_per_frame: sample_rate / (60.0 * scroll_speed),
             taken_samples: 0.0,
             starting_octave,
-            volume_buf: Vec::new()
+            volume_buf: Vec::new(),
+            frame_count: 0
         }
     }
 
@@ -84,10 +87,16 @@ impl PianoRollState {
 
         debug_assert!(!index.is_nan(), "Piano key index is NaN?!");
 
+        let mut frame = self.frame_count;
+
         if let Some(last_slice) = self.slices.iter_mut().last() {
             if last_slice.width == width && ((last_slice.color == color && last_slice.index == index) || width == 0.0) {
                 last_slice.height += 1.0;
                 return;
+            }
+
+            if (last_slice.index - index).abs() < 1.0 && last_slice.color == color && last_slice.width != 0.0 && width != 0.0 {
+                frame = last_slice.frame;
             }
         }
 
@@ -95,8 +104,11 @@ impl PianoRollState {
             color,
             index,
             width,
-            height: 1.0
+            height: 1.0,
+            frame
         });
+
+        self.frame_count += 1;
     }
 }
 
@@ -341,6 +353,8 @@ impl Visualizer {
         let keys_w = self.config.key_thickness * key_count as f32;
         let keys_x = pos.x() + ((pos.width() - keys_w) / 2.0) + (self.config.key_thickness / 2.0) - 1.0;
 
+        let mut slices: Vec<(f32, SliceState)> = Vec::new();
+
         for channel in 0..self.channels {
             if self.config.settings.settings(channel).unwrap().hidden() {
                 continue;
@@ -348,47 +362,73 @@ impl Visualizer {
 
             let mut y = pos.y();
             for slice in self.piano_roll_states[channel].slices.iter().rev() {
-                if slice.width > 0.0 {
-                    let slice_pos: Rect;
-                    let mut slice_color: Color;
-
-                    if outline {
-                        slice_pos = Rect::from_xywh(
-                            keys_x + (self.config.key_thickness * slice.index) - (slice.width / 2.0) - (self.config.key_thickness / 2.0),
-                            y - (self.config.key_thickness / 2.0),
-                            slice.width + self.config.key_thickness,
-                            slice.height + self.config.key_thickness
-                        ).unwrap();
-                        slice_color = self.config.outline_color;
-                    } else {
-                        slice_pos = Rect::from_xywh(
-                            keys_x + (self.config.key_thickness * slice.index) - (slice.width / 2.0),
-                            y,
-                            slice.width,
-                            slice.height
-                        ).unwrap();
-                        slice_color = slice.color;
-                    }
-
-                    let mut slice_paint = Paint::default();
-                    slice_paint.anti_alias = slice.width > 1.0;
-                    if slice.width < 1.0 {
-                        slice_color.set_alpha(slice.width);
-                    }
-                    slice_paint.set_color(slice_color);
-
-                    self.canvas.fill_rect(
-                        slice_pos,
-                        &slice_paint,
-                        Transform::identity(),
-                        None
-                    );
-                }
+                slices.push((y, slice.clone()));
 
                 y += slice.height;
                 if y >= pos.bottom() {
+                    if let Some((_, last_slice)) = slices.last_mut() {
+                        last_slice.height -= y - pos.bottom();
+                    }
                     break;
                 }
+            }
+        }
+
+        if !outline {
+            slices.sort_unstable_by(|(y_a, slice_a), (y_b, slice_b)| {
+                if let Some(frame_order) = slice_a.frame.partial_cmp(&slice_b.frame) {
+                    if frame_order != Ordering::Equal {
+                        // Sort: less recent -> more recent
+                        return frame_order;
+                    }
+                }
+                if let Some(width_order) = slice_a.width.partial_cmp(&slice_b.width) {
+                    if width_order != Ordering::Equal {
+                        // Sort: larger -> smaller
+                        return width_order.reverse();
+                    }
+                }
+                // Sort: higher -> lower
+                y_a.partial_cmp(y_b).unwrap_or(Ordering::Equal).reverse()
+            });
+        }
+
+        for (y, slice) in slices {
+            if slice.width > 0.0 {
+                let slice_pos: Rect;
+                let mut slice_color: Color;
+
+                if outline {
+                    slice_pos = Rect::from_xywh(
+                        keys_x + (self.config.key_thickness * slice.index) - (slice.width / 2.0) - (self.config.key_thickness / 2.0),
+                        y - (self.config.key_thickness / 2.0),
+                        slice.width + self.config.key_thickness,
+                        slice.height + self.config.key_thickness
+                    ).unwrap();
+                    slice_color = self.config.outline_color;
+                } else {
+                    slice_pos = Rect::from_xywh(
+                        keys_x + (self.config.key_thickness * slice.index) - (slice.width / 2.0),
+                        y,
+                        slice.width,
+                        slice.height
+                    ).unwrap();
+                    slice_color = slice.color;
+                }
+
+                let mut slice_paint = Paint::default();
+                slice_paint.anti_alias = slice.width > 1.0;
+                if slice.width < 1.0 {
+                    slice_color.set_alpha(slice.width);
+                }
+                slice_paint.set_color(slice_color);
+
+                self.canvas.fill_rect(
+                    slice_pos,
+                    &slice_paint,
+                    Transform::identity(),
+                    None
+                );
             }
         }
     }

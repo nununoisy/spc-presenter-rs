@@ -4,6 +4,8 @@ import { PitchType, SampleConfig, SampleUtils, SampleConfigWidget } from "./samp
 export { PitchType, SampleConfig, SampleUtils }
 import { ColorUtils, ColorPickerButton } from "./color-picker.slint";
 export { ColorUtils }
+import { Progress, ProgressInfo, ProgressType, ProgressUtils } from "./progress.slint";
+export { ProgressInfo, ProgressType }
 
 export enum StopConditionType {
     Frames, Time, SpcDuration
@@ -17,7 +19,7 @@ component FileBrowser {
     callback browse() -> string;
     callback cleared();
 
-    in property <string> text: "File:";
+    in property <string> text: @tr("file browser: default label" => "File:");
     in property <bool> enabled: true;
     in property <bool> clearable: false;
     out property <string> path: "";
@@ -32,17 +34,17 @@ component FileBrowser {
         LineEdit {
             enabled: false;
             text: path;
-            placeholder-text: "No file selected";
+            placeholder-text: @tr("file browser: input path placeholder" => "No file selected");
         }
         Button {
-            text: "Browse...";
+            text: @tr("file browser: open file dialog button" => "Browse...");
             enabled: root.enabled;
             clicked => {
                 root.path = root.browse();
             }
         }
         if root.clearable: Button {
-            text: "Clear";
+            text: @tr("file browser: clear selected file button" => "Clear");
             enabled: root.enabled;
             clicked => {
                 root.path = "";
@@ -57,7 +59,7 @@ export component MainWindow inherits Window {
     callback browse-for-background() -> string;
     callback background-cleared();
     callback import-tunings();
-    callback format-duration(StopConditionType, int) -> string;
+    callback get-duration(StopConditionType, int) -> duration;
     callback start-render();
     callback cancel-render();
     callback play-audio(SampleConfig) -> bool;
@@ -74,15 +76,21 @@ export component MainWindow inherits Window {
 
     in property <bool> rendering: false;
     in property <bool> processing-samples: false;
-    in property <float> progress: 0.0;
-    in property <string> progress-title: "Idle";
-    in property <string> progress-status: "";
-    in property <bool> progress-error: false;
-    in property <bool> progress-indeterminate: false;
+    in property <ProgressInfo> progress-info: {
+        progress-type: ProgressType.Initial,
+        progress: 0.0,
+        error: "",
+        fps: 0,
+        encoded-duration: -2ms,
+        expected-duration: -2ms,
+        video-size: 0,
+        eta: -2ms,
+        source: 0,
+        current-sample: 0,
+        total-samples: 0
+    };
 
-    property<float> i-progress-anim-tick: -cos(180deg * mod(animation-tick() / 1.3s, 2) / 2) + 1;
-
-    in property <[string]> metadata-lines: ["<no metadata>"];
+    in property <[string]> metadata-lines: [];
     in-out property <[[int]]> channel-base-colors: [];
     in-out property <[SampleConfig]> sample-configs: [];
     in-out property <int> fadeout-duration: 180;
@@ -96,7 +104,7 @@ export component MainWindow inherits Window {
     property <bool> configuration-open: true;
 
     public function reformat-duration() {
-        i-formatted-duration.text = root.format-duration(root.stop-condition-type, root.stop-condition-num);
+        i-formatted-duration.text = ProgressUtils.format-duration(root.get-duration(root.stop-condition-type, root.stop-condition-num));
     }
 
     public function reset-sample-configs() {
@@ -107,8 +115,8 @@ export component MainWindow inherits Window {
         i-sample-config-widget.audio-stopped();
     }
 
-    property <int> i-resampling-type-index: 0;
-    property <string> i-resampling-type-text: "Hardware-accurate Gaussian";
+    property <int> i-resampling-type-index;
+    property <string> i-resampling-type-text;
 
     public pure function resampling-type() -> ResamplingType {
         if (root.i-resampling-type-index == 1) {
@@ -120,17 +128,25 @@ export component MainWindow inherits Window {
         }
     }
 
+    property <string> i-accurate-resampling-label: @tr("resampling type: accurate Gaussian interpolation" => "Hardware-accurate Gaussian");
+    property <string> i-gaussian-resampling-label: @tr("resampling type: high-fidelity Gaussian interpolation" => "High-fidelity Gaussian");
+    property <string> i-linear-resampling-label: @tr("resampling type: linear interpolation" => "Linear");
+
     public function set-resampling-type(new-resampling-type: ResamplingType) {
         if (new-resampling-type == ResamplingType.Accurate) {
-            root.i-resampling-type-text = "Hardware-accurate Gaussian";
+            root.i-resampling-type-text = root.i-accurate-resampling-label;
             root.i-resampling-type-index = 0;
         } else if (new-resampling-type == ResamplingType.Gaussian) {
-            root.i-resampling-type-text = "High-fidelity Gaussian";
+            root.i-resampling-type-text = root.i-gaussian-resampling-label;
             root.i-resampling-type-index = 1;
         } else if (new-resampling-type == ResamplingType.Linear) {
-            root.i-resampling-type-text = "Linear";
+            root.i-resampling-type-text = root.i-linear-resampling-label;
             root.i-resampling-type-index = 2;
         }
+    }
+
+    init => {
+        set-resampling-type(ResamplingType.Accurate);
     }
 
     title: "SPCPresenter";
@@ -141,7 +157,7 @@ export component MainWindow inherits Window {
     Rectangle {
         ToolbarButton {
             icon: @image-url("info.svg");
-            tooltip: "About";
+            tooltip: @tr("version dialog: about button" => "About");
             x: parent.width - self.width - 16px;
             y: 16px;
             clicked => {
@@ -232,7 +248,7 @@ export component MainWindow inherits Window {
                     HorizontalLayout {
                         alignment: center;
 
-                        Button { text: "Close"; }
+                        Button { text: @tr("version dialog: close button" => "Close"); }
                     }
                 }
             }
@@ -250,9 +266,13 @@ export component MainWindow inherits Window {
             horizontal-alignment: center;
         }
         FileBrowser {
-            text: "Input SPC:";
+            text: @tr("input SPC file browser label" => "Input SPC:");
             enabled: !root.rendering;
             browse => { root.browse-for-module() }
+        }
+        if metadata-lines.length == 0: Text {
+            horizontal-alignment: center;
+            text: @tr("SPC Id666 metadata lines placeholder" => "<no metadata>");
         }
         for line in metadata-lines: Text {
             horizontal-alignment: center;
@@ -263,7 +283,7 @@ export component MainWindow inherits Window {
             height: 28px;
             
             Text {
-                text: "Base channel colors:";
+                text: @tr("base channel color selectors label" => "Base channel colors:");
                 vertical-alignment: center;
             }
             Rectangle {
@@ -272,7 +292,7 @@ export component MainWindow inherits Window {
             ToolbarButton {
                 horizontal-stretch: 0.0;
                 icon: @image-url("arrow-import.svg");
-                tooltip: "Import";
+                tooltip: @tr("config import tooltip" => "Import");
                 enabled: !rendering;
                 clicked => {
                     root.import-config();
@@ -281,7 +301,7 @@ export component MainWindow inherits Window {
             ToolbarButton {
                 horizontal-stretch: 0.0;
                 icon: @image-url("arrow-export.svg");
-                tooltip: "Export";
+                tooltip: @tr("config export tooltip" => "Export");
                 enabled: !rendering;
                 clicked => {
                     root.export-config();
@@ -303,7 +323,7 @@ export component MainWindow inherits Window {
             ToolbarButton {
                 horizontal-stretch: 0.0;
                 icon: @image-url("arrow-reset.svg");
-                tooltip: "Reset";
+                tooltip: @tr("config reset tooltip" => "Reset");
                 enabled: !root.rendering;
                 destructive: true;
                 clicked => {
@@ -333,7 +353,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     Text {
-                        text: "Sample tuning";
+                        text: @tr("sample tuning section header" => "Sample tuning");
                         vertical-alignment: center;
                     }
                     Rectangle {
@@ -345,7 +365,7 @@ export component MainWindow inherits Window {
             if root.configuration-open: ToolbarButton {
                 horizontal-stretch: 0.0;
                 icon: @image-url("arrow-import.svg");
-                text: "Import tunings";
+                text: @tr("sample tuning import button" => "Import tunings");
                 enabled: !root.rendering && !root.processing-samples;
                 clicked => {
                     root.import-tunings();
@@ -369,7 +389,7 @@ export component MainWindow inherits Window {
             }
 
             FileBrowser {
-                text: "Background:";
+                text: @tr("render background file browser label" => "Background:");
                 enabled: !root.rendering;
                 clearable: true;
                 browse => { root.browse-for-background() }
@@ -381,7 +401,7 @@ export component MainWindow inherits Window {
             alignment: stretch;
             spacing: 8px;
             Text {
-                text: "Render duration:";
+                text: @tr("render duration label" => "Render duration:");
                 vertical-alignment: center;
             }
             if stop-condition-type != StopConditionType.SpcDuration : LineEdit {
@@ -395,7 +415,11 @@ export component MainWindow inherits Window {
                 }
             }
             ComboBox {
-                model: ["seconds", "frames", "SPC duration"];
+                model: [
+                    @tr("render duration: seconds" => "seconds"),
+                    @tr("render duration: frames" => "frames"),
+                    @tr("render duration: duration from SPC Id666 header" => "SPC duration")
+                ];
                 enabled: !rendering;
                 selected => {
                     if (self.current-index == 0) {
@@ -409,7 +433,7 @@ export component MainWindow inherits Window {
                 }
             }
             i-formatted-duration := Text {
-                text: "00:05:00";
+                text: ProgressUtils.format-duration(300s);
                 vertical-alignment: center;
                 color: self.text == "<error>"
                     ? red
@@ -421,7 +445,7 @@ export component MainWindow inherits Window {
             alignment: stretch;
             spacing: 8px;
             Text {
-                text: "Fadeout frames:";
+                text: @tr("render fadeout duration label" => "Fadeout frames:");
                 vertical-alignment: center;
             }
             SpinBox {
@@ -436,7 +460,7 @@ export component MainWindow inherits Window {
             alignment: stretch;
             spacing: 8px;
             Text {
-                text: "Output video size:";
+                text: @tr("render output resolution label" => "Output video size:");
                 vertical-alignment: center;
             }
             SpinBox {
@@ -456,15 +480,15 @@ export component MainWindow inherits Window {
                 enabled: !root.rendering;
             }
             Button {
-                text: "1080p";
-                enabled: !rendering;
+                text: @tr("preset resolution: HD 1080p (1920x1080)" => "1080p");
+                enabled: !root.rendering;
                 clicked => {
                     root.output-width = 1920;
                     root.output-height = 1080;
                 }
             }
             Button {
-                text: "4K";
+                text: @tr("preset resolution: 4K 2160p (3840x2160)" => "4K");
                 enabled: !root.rendering;
                 clicked => {
                     root.output-width = 3840;
@@ -477,11 +501,15 @@ export component MainWindow inherits Window {
             alignment: stretch;
             spacing: 8px;
             Text {
-                text: "Sample interpolation:";
+                text: @tr("sample interpolation type label" => "Sample interpolation:");
                 vertical-alignment: center;
             }
             ComboBox {
-                model: ["Hardware-accurate Gaussian", "High-fidelity Gaussian", "Linear"];
+                model: [
+                    root.i-accurate-resampling-label,
+                    root.i-gaussian-resampling-label,
+                    root.i-linear-resampling-label
+                ];
                 enabled: !root.rendering;
                 current-index <=> root.i-resampling-type-index;
                 current-value <=> root.i-resampling-type-text;
@@ -493,7 +521,7 @@ export component MainWindow inherits Window {
             spacing: 8px;
 
             CheckBox {
-                text: "Blargg's DSP post-filter";
+                text: @tr("Blargg's DSP filter enable checkbox" => "Blargg's DSP post-filter");
                 checked <=> root.filter-enabled;
                 enabled: !root.rendering;
             }
@@ -503,8 +531,8 @@ export component MainWindow inherits Window {
             alignment: center;
             Button {
                 text: rendering
-                    ? "Cancel"
-                    : "Render!";
+                    ? @tr("cancel render button" => "Cancel")
+                    : @tr("start render button" => "Render!");
                 primary: !root.rendering;
                 enabled: !root.processing-samples;
                 clicked => {
@@ -517,76 +545,8 @@ export component MainWindow inherits Window {
             }
         }
 
-        VerticalBox {
-            alignment: start;
-            spacing: 8px;
-
-            Text {
-                text: root.progress-title;
-                font-size: 16px;
-            }
-            Rectangle {
-                height: 6px;
-                clip: true;
-
-                border-radius: 3px;
-                background: #313131;  // Palette.neutralLighter
-
-                if !root.progress-indeterminate: Rectangle {
-                    x: 0;
-                    y: 0;
-                    height: parent.height;
-                    width: Math.max(0.0, Math.min(root.progress, 1.0)) * parent.width;
-
-                    border-width: 1px;
-                    border-radius: 3px;
-                    border-color: root.progress-error ? #bc2f32 : #60cdff;  // Palette.themePrimary
-                    background: root.progress-error ? #bc2f32 : #60cdff;  // Palette.themePrimary
-
-                    animate width {
-                        duration: 100ms;
-                        easing: ease-in-out;
-                    }
-                }
-                if root.progress-indeterminate: Rectangle {
-                    x: (4 * (root.i-progress-anim-tick / 1.4) - 1) * parent.width;
-                    y: 0;
-                    height: parent.height;
-                    width: 0.5 * parent.width;
-
-                    border-width: 1px;
-                    border-radius: 3px;
-                    border-color: root.i-progress-anim-tick > 1.4 ? transparent : #60cdff;  // Palette.themePrimary
-                    background: root.i-progress-anim-tick > 1.4 ? transparent : #60cdff;  // Palette.themePrimary
-                }
-                if root.progress-indeterminate: Rectangle {
-                    x: (3.1666 * ((root.i-progress-anim-tick - 0.6) / 1.4) - 1.5) * parent.width;
-                    y: 0;
-                    height: parent.height;
-                    width: 0.8 * parent.width;
-
-                    border-width: 1px;
-                    border-radius: 3px;
-                    border-color: root.i-progress-anim-tick < 0.6 ? transparent : #60cdff;  // Palette.themePrimary
-                    background: root.i-progress-anim-tick < 0.6 ? transparent : #60cdff;  // Palette.themePrimary
-                }
-            }
-            HorizontalLayout {
-                alignment: start;
-                spacing: 6px;
-
-                if root.progress-error: Image {
-                    colorize: #bc2f32;
-                    height: 16px;
-                    width: 16px;
-                    source: @image-url("circle-error.svg");
-                }
-                Text {
-                    text: root.progress-status;
-                    color: root.progress-error ? #bc2f32 : #ffffff;
-                    vertical-alignment: center;
-                }
-            }
+        Progress {
+            progress-info: root.progress-info;
         }
     }
 }

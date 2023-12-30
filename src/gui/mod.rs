@@ -1,6 +1,7 @@
 mod render_thread;
 mod sample_processing_thread;
 mod audio_previewer;
+mod localization;
 
 use std::sync::{Arc, Mutex};
 use std::fs;
@@ -52,6 +53,10 @@ fn slint_color_component_arr<I: IntoIterator<Item = Color>>(a: I) -> slint::Mode
         .map(|c| slint::ModelRc::new(slint::VecModel::from(vec![c.red() as i32, c.green() as i32, c.blue() as i32])))
         .collect();
     slint::ModelRc::new(slint::VecModel::from(color_vecs))
+}
+
+fn slint_duration(duration: Duration) -> i64 {
+    duration.as_millis() as i64
 }
 
 fn browse_for_module_dialog() -> Option<String> {
@@ -181,7 +186,7 @@ fn get_spc_metadata<P: AsRef<Path>>(spc_path: P) -> Result<(Option<Duration>, sl
                 metadata.dumper_name
             ]
         ),
-        None => (None, vec!["<no metadata>".to_string()])
+        None => (None, vec![])
     };
 
     Ok((duration, slint_string_arr(lines)))
@@ -189,31 +194,55 @@ fn get_spc_metadata<P: AsRef<Path>>(spc_path: P) -> Result<(Option<Duration>, sl
 
 fn random_slint_color() -> slint::ModelRc<i32> {
     let h = rand::random::<f64>() * 360.0;
-    let s = (rand::random::<f64>() * 0.85) + 0.15;
-    let l = (rand::random::<f64>() * 0.2) + 0.65;
+    let s = (rand::random::<f64>() * 0.25) + 0.75;
+    let v = (rand::random::<f64>() * 0.15) + 0.85;
 
-    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
-    let x = c * (1.0 - (((h / 60.0) % 2.0) - 1.0).abs());
-    let m = l - c / 2.0;
+    let rgb: Vec<i32> = (0..3)
+        .map(|i| {
+            let k = ((5.0 - (2.0 * i as f64)) + (h / 60.0)) % 6.0;
+            let c = v - (v * s * k.min(4.0 - k).clamp(0.0, 1.0));
+            (c * 255.0).floor() as i32
+        })
+        .collect();
 
-    let (rp, gp, bp) = match h as u32 {
-        0 ..= 59 => (c, x, 0.0),
-        60 ..= 119 => (x, c, 0.0),
-        120 ..= 179 => (0.0, c, x),
-        180 ..= 239 => (0.0, x, c),
-        240 ..= 299 => (x, 0.0, c),
-        300 ..= 359 => (c, 0.0, x),
-        _ => unreachable!()
+    slint_int_arr(rgb)
+}
+
+const UNKNOWN_DURATION: i64 = -2;
+const ERROR_DURATION: i64 = -1;
+
+fn default_progress_info(progress_type: ProgressType) -> ProgressInfo {
+    let mut result = ProgressInfo {
+        progress_type,
+        progress: 0.0,
+        error: "".into(),
+        fps: 0,
+        encoded_duration: UNKNOWN_DURATION,
+        expected_duration: UNKNOWN_DURATION,
+        video_size: 0,
+        eta: UNKNOWN_DURATION,
+        source: 0,
+        current_sample: 0,
+        total_samples: 0
     };
 
-    let r = ((rp + m) * 255.0) as u8;
-    let g = ((gp + m) * 255.0) as u8;
-    let b = ((bp + m) * 255.0) as u8;
+    match progress_type {
+        ProgressType::RenderError | ProgressType::ProcessorError => result.progress = 1.0,
+        ProgressType::RenderFinished | ProgressType::ProcessorFinished => result.progress = 1.0,
+        ProgressType::RenderCancelled | ProgressType::ProcessorCancelled => result.progress = 1.0,
+        _ => ()
+    }
 
-    slint_int_arr([r as i32, g as i32, b as i32])
+    result
+}
+
+fn slint_optional_duration(duration: Option<Duration>) -> i64 {
+    duration.map(slint_duration).unwrap_or(UNKNOWN_DURATION)
 }
 
 pub fn run() {
+    localization::init_localization();
+
     let main_window = MainWindow::new().unwrap();
 
     main_window.global::<ColorUtils>().on_hex_to_color(|hex| {
@@ -380,80 +409,48 @@ pub fn run() {
             match msg {
                 RenderThreadMessage::Error(e) => {
                     let main_window_weak = main_window_weak.clone();
+
+                    let mut info = default_progress_info(ProgressType::RenderError);
+                    info.error = e.to_string().into();
+
                     slint::invoke_from_event_loop(move || {
                         main_window_weak.unwrap().set_rendering(false);
-                        main_window_weak.unwrap().set_progress_indeterminate(false);
-                        main_window_weak.unwrap().set_progress_error(true);
-                        main_window_weak.unwrap().set_progress_title("Idle".into());
-                        main_window_weak.unwrap().set_progress_status(format!("Render error: {}", e).into());
+                        main_window_weak.unwrap().set_progress_info(info);
                     }).unwrap();
                 }
                 RenderThreadMessage::RenderStarting => {
                     let main_window_weak = main_window_weak.clone();
                     slint::invoke_from_event_loop(move || {
                         main_window_weak.unwrap().set_rendering(true);
-                        main_window_weak.unwrap().set_progress_indeterminate(true);
-                        main_window_weak.unwrap().set_progress_error(false);
-                        main_window_weak.unwrap().set_progress(0.0);
-                        main_window_weak.unwrap().set_progress_title("Setting up".into());
-                        main_window_weak.unwrap().set_progress_status("Preparing your song".into());
+                        main_window_weak.unwrap().set_progress_info(default_progress_info(ProgressType::RenderStarting));
                     }).unwrap();
                 }
                 RenderThreadMessage::RenderProgress(p) => {
-                    let current_video_size = HumanBytes(p.encoded_size as u64);
-                    let current_video_duration = FormattedDuration(p.encoded_duration);
-                    let expected_video_duration = match p.expected_duration {
-                        Some(duration) => FormattedDuration(duration).to_string(),
-                        None => "(unknown)".to_string()
-                    };
-                    // let elapsed_duration = FormattedDuration(p.elapsed_duration);
-                    let eta_duration = match p.eta_duration {
-                        Some(duration) => HumanDuration(duration.saturating_sub(p.elapsed_duration)).to_string(),
-                        None => "Unknown time".to_string()
-                    };
-
-                    let (progress, progress_title) = match (p.frame, p.expected_duration_frames) {
-                        (frame, Some(exp_dur_frames)) => {
-                            let progress = frame as f32 / exp_dur_frames as f32;
-                            (progress, "Rendering".to_string())
-                        },
-                        (0, None) => (0.0, "Initializing".to_string()),
-                        (_, None) => (0.0, "Rendering to loop point".to_string()),
-                    };
-                    let progress_status = format!(
-                        "{}%, {} FPS, encoded {}/{} ({}), {} remaining",
-                        (progress * 100.0).round(),
-                        p.average_fps,
-                        current_video_duration, expected_video_duration,
-                        current_video_size,
-                        eta_duration
-                    );
+                    let mut info = default_progress_info(ProgressType::Rendering);
+                    info.progress = p.expected_duration_frames.map(|exp_dur_frames| p.frame as f32 / exp_dur_frames as f32).unwrap_or(0.0);
+                    info.fps = p.average_fps as i32;
+                    info.encoded_duration = slint_duration(p.encoded_duration);
+                    info.expected_duration = slint_optional_duration(p.expected_duration);
+                    info.video_size = p.encoded_size as i32;
+                    info.eta = slint_optional_duration(p.eta_duration.map(|eta| eta.saturating_sub(p.elapsed_duration)));
 
                     let main_window_weak = main_window_weak.clone();
                     slint::invoke_from_event_loop(move || {
-                        main_window_weak.unwrap().set_progress_indeterminate(p.expected_duration_frames.is_none());
-                        main_window_weak.unwrap().set_progress(progress);
-                        main_window_weak.unwrap().set_progress_title(progress_title.into());
-                        main_window_weak.unwrap().set_progress_status(progress_status.into());
+                        main_window_weak.unwrap().set_progress_info(info);
                     }).unwrap();
                 }
                 RenderThreadMessage::RenderComplete => {
                     let main_window_weak = main_window_weak.clone();
                     slint::invoke_from_event_loop(move || {
                         main_window_weak.unwrap().set_rendering(false);
-                        main_window_weak.unwrap().set_progress_indeterminate(false);
-                        main_window_weak.unwrap().set_progress(1.0);
-                        main_window_weak.unwrap().set_progress_title("Idle".into());
-                        main_window_weak.unwrap().set_progress_status("Finished".into());
+                        main_window_weak.unwrap().set_progress_info(default_progress_info(ProgressType::RenderFinished));
                     }).unwrap();
                 }
                 RenderThreadMessage::RenderCancelled => {
                     let main_window_weak = main_window_weak.clone();
                     slint::invoke_from_event_loop(move || {
                         main_window_weak.unwrap().set_rendering(false);
-                        main_window_weak.unwrap().set_progress_indeterminate(false);
-                        main_window_weak.unwrap().set_progress_title("Idle".into());
-                        main_window_weak.unwrap().set_progress_status("Render cancelled".into());
+                        main_window_weak.unwrap().set_progress_info(default_progress_info(ProgressType::RenderCancelled));
                     }).unwrap();
                 }
             }
@@ -468,62 +465,43 @@ pub fn run() {
             match msg {
                 SampleProcessingThreadMessage::Error(e) => {
                     let main_window_weak = main_window_weak.clone();
+                    let mut info = default_progress_info(ProgressType::ProcessorError);
+                    info.error = e.to_string().into();
+
                     slint::invoke_from_event_loop(move || {
-                        main_window_weak.unwrap().set_processing_samples(false);
-                        main_window_weak.unwrap().set_progress_indeterminate(false);
-                        main_window_weak.unwrap().set_progress_error(true);
-                        main_window_weak.unwrap().set_progress_title("Idle".into());
-                        main_window_weak.unwrap().set_progress_status(format!("Sample processing error: {}", e).into());
+                        main_window_weak.unwrap().set_rendering(false);
+                        main_window_weak.unwrap().set_progress_info(info);
                     }).unwrap();
                 }
                 SampleProcessingThreadMessage::ProcessingStarting => {
                     let main_window_weak = main_window_weak.clone();
                     slint::invoke_from_event_loop(move || {
                         main_window_weak.unwrap().set_processing_samples(true);
-                        main_window_weak.unwrap().set_progress_indeterminate(true);
-                        main_window_weak.unwrap().set_progress_error(false);
-                        main_window_weak.unwrap().set_progress(0.0);
-                        main_window_weak.unwrap().set_progress_title("Setting up".into());
-                        main_window_weak.unwrap().set_progress_status("Preparing to detect samples".into());
+                        main_window_weak.unwrap().set_progress_info(default_progress_info(ProgressType::ProcessorStarting));
                     }).unwrap();
                 }
                 SampleProcessingThreadMessage::ProcessingProgress(p) => {
+                    let mut info = default_progress_info(ProgressType::Processing);
+
                     match p {
                         SampleProcessorProgress::DetectingSamples { current_frame, total_frames, detected_samples } => {
-                            let progress = (current_frame as f32 / total_frames as f32) / 2.0;
-                            let progress_status = format!(
-                                "{}%, found {} samples",
-                                (progress * 100.0).round(),
-                                detected_samples
-                            );
-
-                            let main_window_weak = main_window_weak.clone();
-                            slint::invoke_from_event_loop(move || {
-                                main_window_weak.unwrap().set_progress_indeterminate(false);
-                                main_window_weak.unwrap().set_progress(progress);
-                                main_window_weak.unwrap().set_progress_title("Detecting samples".into());
-                                main_window_weak.unwrap().set_progress_status(progress_status.into());
-                            }).unwrap();
+                            info.progress = (current_frame as f32 / total_frames as f32) / 2.0;
+                            info.current_sample = 0;
+                            info.total_samples = detected_samples as i32;
                         },
                         SampleProcessorProgress::ProcessingSamples { current_sample, total_samples, source } => {
-                            let progress = 0.5 + (current_sample as f32 / total_samples as f32) / 2.0;
-                            let progress_status = format!(
-                                "{}%, processing sample ${:x} ({}/{})",
-                                (progress * 100.0).round(),
-                                source,
-                                current_sample + 1, total_samples
-                            );
-
-                            let main_window_weak = main_window_weak.clone();
-                            slint::invoke_from_event_loop(move || {
-                                main_window_weak.unwrap().set_progress_indeterminate(false);
-                                main_window_weak.unwrap().set_progress(progress);
-                                main_window_weak.unwrap().set_progress_title("Processing samples".into());
-                                main_window_weak.unwrap().set_progress_status(progress_status.into());
-                            }).unwrap();
+                            info.progress = 0.5 + (current_sample as f32 / total_samples as f32) / 2.0;
+                            info.source = source as i32;
+                            info.current_sample = (current_sample + 1) as i32;
+                            info.total_samples = total_samples as i32;
                         },
                         _ => unreachable!()
                     }
+
+                    let main_window_weak = main_window_weak.clone();
+                    slint::invoke_from_event_loop(move || {
+                        main_window_weak.unwrap().set_progress_info(info);
+                    }).unwrap();
                 },
                 SampleProcessingThreadMessage::ProcessingComplete(sample_data) => {
                     options.lock().unwrap().sample_tunings = sample_data;
@@ -537,7 +515,7 @@ pub fn run() {
                             .sample_tunings
                             .iter()
                             .map(|(source, data)| SampleConfig {
-                                name: "<none>".into(),
+                                name: "".into(),
                                 source: *source as i32,
                                 pitch_type: PitchType::Automatic,
                                 base_frequency: data.base_pitch() as f32,
@@ -551,20 +529,14 @@ pub fn run() {
 
                         main_window_weak.unwrap().set_sample_configs(slint::ModelRc::new(slint::VecModel::from(sample_configs)));
                         main_window_weak.unwrap().set_processing_samples(false);
-                        main_window_weak.unwrap().set_progress_indeterminate(false);
-                        main_window_weak.unwrap().set_progress(1.0);
-                        main_window_weak.unwrap().set_progress_title("Idle".into());
-                        main_window_weak.unwrap().set_progress_status("Processing finished".into());
+                        main_window_weak.unwrap().set_progress_info(default_progress_info(ProgressType::ProcessorFinished));
                     }).unwrap();
                 },
                 SampleProcessingThreadMessage::ProcessingCancelled => {
                     let main_window_weak = main_window_weak.clone();
                     slint::invoke_from_event_loop(move || {
                         main_window_weak.unwrap().set_processing_samples(false);
-                        main_window_weak.unwrap().set_progress_indeterminate(false);
-                        main_window_weak.unwrap().set_progress(1.0);
-                        main_window_weak.unwrap().set_progress_title("Idle".into());
-                        main_window_weak.unwrap().set_progress_status("Processing cancelled".into());
+                        main_window_weak.unwrap().set_progress_info(default_progress_info(ProgressType::ProcessorCancelled));
                     }).unwrap();
                 }
             }
@@ -626,7 +598,7 @@ pub fn run() {
 
     {
         let options = options.clone();
-        main_window.on_format_duration(move |stop_condition_type, stop_condition_num| {
+        main_window.on_get_duration(move |stop_condition_type, stop_condition_num| {
             let duration = match stop_condition_type {
                 StopConditionType::Frames => {
                     let seconds = (stop_condition_num as f64) / 60.0;
@@ -638,11 +610,11 @@ pub fn run() {
                 StopConditionType::SpcDuration => {
                     match get_spc_metadata(options.lock().unwrap().input_path.clone()) {
                         Ok((Some(duration), _metadata_lines)) => duration,
-                        _ => return "<error>".into()
+                        _ => return ERROR_DURATION
                     }
                 }
             };
-            FormattedDuration(duration).to_string().into()
+            slint_duration(duration)
         });
     }
 

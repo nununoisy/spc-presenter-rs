@@ -1,0 +1,402 @@
+
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2023-12-29 21:58+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: \n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: main.slint:22
+msgctxt "file browser: default label"
+msgid "File:"
+msgstr ""
+
+#: main.slint:37
+msgctxt "file browser: input path placeholder"
+msgid "No file selected"
+msgstr ""
+
+#: main.slint:40
+msgctxt "file browser: open file dialog button"
+msgid "Browse..."
+msgstr ""
+
+#: main.slint:47
+msgctxt "file browser: clear selected file button"
+msgid "Clear"
+msgstr ""
+
+#: main.slint:131
+msgctxt "resampling type: accurate Gaussian interpolation"
+msgid "Hardware-accurate Gaussian"
+msgstr ""
+
+#: main.slint:132
+msgctxt "resampling type: high-fidelity Gaussian interpolation"
+msgid "High-fidelity Gaussian"
+msgstr ""
+
+#: main.slint:133
+msgctxt "resampling type: linear interpolation"
+msgid "Linear"
+msgstr ""
+
+#: main.slint:160
+msgctxt "version dialog: about button"
+msgid "About"
+msgstr ""
+
+#: main.slint:251
+msgctxt "version dialog: close button"
+msgid "Close"
+msgstr ""
+
+#: main.slint:269
+msgctxt "input SPC file browser label"
+msgid "Input SPC:"
+msgstr ""
+
+#: main.slint:275
+msgctxt "SPC Id666 metadata lines placeholder"
+msgid "<no metadata>"
+msgstr ""
+
+#: main.slint:286
+msgctxt "base channel color selectors label"
+msgid "Base channel colors:"
+msgstr ""
+
+#: main.slint:295
+msgctxt "config import tooltip"
+msgid "Import"
+msgstr ""
+
+#: main.slint:304
+msgctxt "config export tooltip"
+msgid "Export"
+msgstr ""
+
+#: main.slint:326
+msgctxt "config reset tooltip"
+msgid "Reset"
+msgstr ""
+
+#: main.slint:356
+msgctxt "sample tuning section header"
+msgid "Sample tuning"
+msgstr ""
+
+#: main.slint:368
+msgctxt "sample tuning import button"
+msgid "Import tunings"
+msgstr ""
+
+#: main.slint:392
+msgctxt "render background file browser label"
+msgid "Background:"
+msgstr ""
+
+#: main.slint:404
+msgctxt "render duration label"
+msgid "Render duration:"
+msgstr ""
+
+#: main.slint:419
+msgctxt "render duration: seconds"
+msgid "seconds"
+msgstr ""
+
+#: main.slint:420
+msgctxt "render duration: frames"
+msgid "frames"
+msgstr ""
+
+#: main.slint:421
+msgctxt "render duration: duration from SPC Id666 header"
+msgid "SPC duration"
+msgstr ""
+
+#: main.slint:448
+msgctxt "render fadeout duration label"
+msgid "Fadeout frames:"
+msgstr ""
+
+#: main.slint:463
+msgctxt "render output resolution label"
+msgid "Output video size:"
+msgstr ""
+
+#: main.slint:483
+msgctxt "preset resolution: HD 1080p (1920x1080)"
+msgid "1080p"
+msgstr ""
+
+#: main.slint:491
+msgctxt "preset resolution: 4K 2160p (3840x2160)"
+msgid "4K"
+msgstr ""
+
+#: main.slint:504
+msgctxt "sample interpolation type label"
+msgid "Sample interpolation:"
+msgstr ""
+
+#: main.slint:524
+msgctxt "Blargg's DSP filter enable checkbox"
+msgid "Blargg's DSP post-filter"
+msgstr ""
+
+#: main.slint:534
+msgctxt "cancel render button"
+msgid "Cancel"
+msgstr ""
+
+#: main.slint:535
+msgctxt "start render button"
+msgid "Render!"
+msgstr ""
+
+#: progress.slint:37
+msgctxt "formatted duration number (< 10)"
+msgid "0{}"
+msgstr ""
+
+#: progress.slint:39
+msgctxt "formatted duration number (>= 10)"
+msgid "{}"
+msgstr ""
+
+#: progress.slint:45
+msgctxt "error duration"
+msgid "<error>"
+msgstr ""
+
+#: progress.slint:47
+msgctxt "unknown formatted duration"
+msgid "<unknown>"
+msgstr ""
+
+#: progress.slint:49
+msgctxt "formatted duration"
+msgid "{}:{}:{}"
+msgstr ""
+
+#: progress.slint:55
+msgctxt "unknown humanized duration"
+msgid "unknown time remaining"
+msgstr ""
+
+#: progress.slint:57
+msgctxt "humanized duration (hours)"
+msgid "{n} hour remaining"
+msgid_plural "{n} hours remaining"
+msgstr[0] ""
+msgstr[1] ""
+
+#: progress.slint:59
+msgctxt "humanized duration (minutes)"
+msgid "{n} minute remaining"
+msgid_plural "{n} minutes remaining"
+msgstr[0] ""
+msgstr[1] ""
+
+#: progress.slint:61
+msgctxt "humanized duration (seconds)"
+msgid "{n} second remaining"
+msgid_plural "{n} seconds remaining"
+msgstr[0] ""
+msgstr[1] ""
+
+#: progress.slint:63
+msgctxt "humanized duration (less than a second)"
+msgid "less than a second remaining"
+msgstr ""
+
+#: progress.slint:69
+msgctxt "humanized size (gibibytes)"
+msgid "{} GiB"
+msgstr ""
+
+#: progress.slint:71
+msgctxt "humanized size (mebibytes)"
+msgid "{} MiB"
+msgstr ""
+
+#: progress.slint:73
+msgctxt "humanized size (kibibytes)"
+msgid "{} KiB"
+msgstr ""
+
+#: progress.slint:75
+msgctxt "humanized size (bytes)"
+msgid "{} B"
+msgstr ""
+
+#: progress.slint:87
+msgctxt "progress: starting"
+msgid "Setting up"
+msgstr ""
+
+#: progress.slint:90
+msgctxt "progress: rendering"
+msgid "Rendering"
+msgstr ""
+
+#: progress.slint:92
+msgctxt "progress: rendering to loop point"
+msgid "Rendering to loop point"
+msgstr ""
+
+#: progress.slint:94
+msgctxt "progress: initializing"
+msgid "Initializing"
+msgstr ""
+
+#: progress.slint:98
+msgctxt "progress: detecting samples"
+msgid "Detecting samples"
+msgstr ""
+
+#: progress.slint:100
+msgctxt "progress: processing samples"
+msgid "Processing samples"
+msgstr ""
+
+#: progress.slint:103
+msgctxt "progress: idle"
+msgid "Idle"
+msgstr ""
+
+#: progress.slint:109
+msgctxt "progress status: render error"
+msgid "Render error: {}"
+msgstr ""
+
+#: progress.slint:111
+msgctxt "progress status: render starting"
+msgid "Preparing your music"
+msgstr ""
+
+#: progress.slint:113
+msgctxt "progress status: rendering"
+msgid "{}%, {} FPS, encoded {}/{} ({}), {}"
+msgstr ""
+
+#: progress.slint:121
+msgctxt "progress status: render finished"
+msgid "Render finished"
+msgstr ""
+
+#: progress.slint:123
+msgctxt "progress status: render cancelled"
+msgid "Render cancelled"
+msgstr ""
+
+#: progress.slint:125
+msgctxt "progress status: processor error"
+msgid "Processor error: {}"
+msgstr ""
+
+#: progress.slint:127
+msgctxt "progress status: processor starting"
+msgid "Preparing to detect samples"
+msgstr ""
+
+#: progress.slint:129
+msgctxt "progress status: detecting samples"
+msgid "{}%, found {}"
+msgstr ""
+
+#: progress.slint:131
+msgctxt "progress status: detected sample count"
+msgid "{n} sample"
+msgid_plural "{n} samples"
+msgstr[0] ""
+msgstr[1] ""
+
+#: progress.slint:133
+msgctxt "progress status: processing samples"
+msgid "{}%, processing sample {} ({}/{})"
+msgstr ""
+
+#: progress.slint:139
+msgctxt "progress status: processor finished"
+msgid "Processing finished"
+msgstr ""
+
+#: progress.slint:141
+msgctxt "progress status: processor cancelled"
+msgid "Processing cancelled"
+msgstr ""
+
+#: sample-config.slint:35
+msgctxt "pitch type: automatic"
+msgid "Automatic"
+msgstr ""
+
+#: sample-config.slint:36
+msgctxt "pitch type: manually specified frequency"
+msgid "Frequency"
+msgstr ""
+
+#: sample-config.slint:37
+msgctxt "pitch type: AddMusicK tuning parameters"
+msgid "AddMusicK tuning"
+msgstr ""
+
+#: sample-config.slint:170
+msgctxt "sample config: config pane placeholder text"
+msgid "<no sample selected>"
+msgstr ""
+
+#: sample-config.slint:187
+msgctxt "sample config: sample source index and name"
+msgid "Sample {}: {}"
+msgstr ""
+
+#: sample-config.slint:196
+msgctxt "sample config: dump sample button"
+msgid "Dump"
+msgstr ""
+
+#: sample-config.slint:210
+msgctxt "sample config: decrease preview piano octave button tooltip"
+msgid "Decrease preview octave"
+msgstr ""
+
+#: sample-config.slint:233
+msgctxt "sample config: increase preview piano octave button tooltip"
+msgid "Increase preview octave"
+msgstr ""
+
+#: sample-config.slint:273
+msgctxt "sample config: DSP VxPITCH register value label"
+msgid "Pitch:"
+msgstr ""
+
+#: sample-config.slint:304
+msgctxt "sample config: Hertz unit suffix"
+msgid "Hz"
+msgstr ""
+
+#: sample-config.slint:310
+msgctxt "sample config: AddMusicK tuning param (keep short!)"
+msgid "Tuning"
+msgstr ""
+
+#: sample-config.slint:321
+msgctxt "sample config: AddMusicK subtuning param (keep short!)"
+msgid "Sub."
+msgstr ""
+
+#: sample-config.slint:336
+msgctxt "sample config: per-sample color selector label"
+msgid "Per-sample color:"
+msgstr ""
+

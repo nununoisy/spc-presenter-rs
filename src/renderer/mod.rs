@@ -31,7 +31,7 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(options: RendererOptions) -> Result<Self> {
-        let emulator = Emulator::from_spc(options.input_path.clone())?;
+        let emulator = Emulator::from_spc(options.input_path.clone(), options.video_options.sample_rate as u32)?;
         let viz = Rc::new(RefCell::new(Visualizer::new(
             8,
             options.video_options.resolution_in.0,
@@ -73,6 +73,7 @@ impl Renderer {
         self.emulator.set_state_receiver(Some(self.viz.clone()));
         self.emulator.set_resampling_mode(self.options.config.emulator.resampling_mode);
         self.emulator.set_filter_enabled(self.options.config.emulator.filter_enabled);
+        self.emulator.set_frame_delay(6);
 
         if !self.options.per_sample_colors.is_empty() {
             self.viz.borrow_mut().settings_manager_mut().put_per_sample_colors(self.options.per_sample_colors.clone());

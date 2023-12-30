@@ -58,7 +58,7 @@ impl BrrStreamDecoder {
         nybbles = (nybbles << 8) | (buf[1] as i32);
 
         for _ in 0..4 {
-            let mut sample = (((nybbles & 0xFFFF) as i16) >> 12) as i32;
+            let mut sample = dsp_helpers::cast_arb_int(nybbles, 16) >> 12;
             nybbles <<= 4;
 
             if self.shift <= 12 {
@@ -96,7 +96,7 @@ impl BrrStreamDecoder {
             }
 
             sample = dsp_helpers::clamp(sample);
-            let sample_16 = (sample << 1) as i16;
+            let sample_16 = dsp_helpers::cast_arb_int(sample << 1, 16) as i16;
             self.samples[self.decode_pos] = sample_16;
             self.decode_pos += 1;
             self.last_last_sample = self.last_sample;

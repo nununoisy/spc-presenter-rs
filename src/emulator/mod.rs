@@ -3,7 +3,7 @@ mod resampler;
 mod filter;
 mod brr_sample;
 
-use anyhow::{Result};
+use anyhow::Result;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::path::Path;
@@ -43,6 +43,7 @@ pub struct Emulator {
     spc_file: Spc,
     apu: Box<Apu>,
     frame_count: usize,
+    frame_delay: usize,
     sample_buffer: VecDeque<i16>,
     resampler: resampler::Resampler,
     filter: filter::BlarggSpcFilter,
@@ -50,7 +51,7 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn from_spc<P: AsRef<Path>>(spc_path: P) -> Result<Self> {
+    pub fn from_spc<P: AsRef<Path>>(spc_path: P, sample_rate: u32) -> Result<Self> {
         let spc_file = Spc::load(spc_path)?;
         let apu = Apu::from_spc(&spc_file);
 
@@ -58,15 +59,12 @@ impl Emulator {
             spc_file,
             apu,
             frame_count: 0,
+            frame_delay: 0,
             sample_buffer: VecDeque::new(),
-            resampler: resampler::Resampler::new(44_100)?,
+            resampler: resampler::Resampler::new(sample_rate)?,
             filter: filter::BlarggSpcFilter::default(),
             filter_enabled: false
         })
-    }
-
-    pub fn set_filter_enabled(&mut self, filter_enabled: bool) {
-        self.filter_enabled = filter_enabled;
     }
 
     pub fn init(&mut self) {
@@ -79,7 +77,9 @@ impl Emulator {
 
         let mut l_sample_buffer = vec![0i16; sample_count];
         let mut r_sample_buffer = vec![0i16; sample_count];
-        self.apu.render(&mut l_sample_buffer, &mut r_sample_buffer, sample_count as i32);
+        if self.frame_count >= self.frame_delay {
+            self.apu.render(&mut l_sample_buffer, &mut r_sample_buffer, sample_count as i32);
+        }
 
         let mut combined_sample_buffer = self.resampler.run(&l_sample_buffer, &r_sample_buffer)?;
         if self.filter_enabled {
@@ -113,8 +113,16 @@ impl Emulator {
         self.apu.dsp.as_mut().unwrap().state_receiver = state_receiver;
     }
 
+    pub fn set_frame_delay(&mut self, frame_delay: usize) {
+        self.frame_delay = frame_delay;
+    }
+
     pub fn set_resampling_mode(&mut self, resampling_mode: ResamplingMode) {
         self.apu.dsp.as_mut().unwrap().set_resampling_mode(resampling_mode);
+    }
+
+    pub fn set_filter_enabled(&mut self, filter_enabled: bool) {
+        self.filter_enabled = filter_enabled;
     }
 
     pub fn get_spc_metadata(&self) -> Option<SpcMetadata> {

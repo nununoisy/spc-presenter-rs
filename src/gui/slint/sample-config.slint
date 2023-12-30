@@ -32,10 +32,14 @@ export component SampleConfigWidget {
 
     property <int> selected-sample-index: -1;
 
+    property <string> i-automatic-pitch-label: @tr("pitch type: automatic" => "Automatic");
+    property <string> i-frequency-pitch-label: @tr("pitch type: manually specified frequency" => "Frequency");
+    property <string> i-addmusick-pitch-label: @tr("pitch type: AddMusicK tuning parameters" => "AddMusicK tuning");
+
     property <string> i-name: "<no name>";
     property <int> i-source: 0;
     property <int> i-pitch-type-index: 0;
-    property <string> i-pitch-type-string: "Automatic";
+    property <string> i-pitch-type-string: i-automatic-pitch-label;
     property <PitchType> i-pitch-type: PitchType.Automatic;
     property <string> i-frequency: "500.0";
     property <string> i-amk-tuning: "$03";
@@ -70,26 +74,26 @@ export component SampleConfigWidget {
     function i-update-pitch-type() {
         if (root.i-pitch-type-index == 0) {
             root.i-pitch-type = PitchType.Automatic;
-            root.i-pitch-type-string = "Automatic";
+            root.i-pitch-type-string = i-automatic-pitch-label;
         } else if (root.i-pitch-type-index == 1) {
             root.i-pitch-type = PitchType.Frequency;
-            root.i-pitch-type-string = "Frequency";
+            root.i-pitch-type-string = i-frequency-pitch-label;
         } else if (root.i-pitch-type-index == 2) {
             root.i-pitch-type = PitchType.AddMusicK;
-            root.i-pitch-type-string = "AddMusicK tuning";
+            root.i-pitch-type-string = i-addmusick-pitch-label;
         }
     }
 
     function i-update-pitch-type-index() {
         if (root.i-pitch-type == PitchType.Automatic) {
             root.i-pitch-type-index = 0;
-            root.i-pitch-type-string = "Automatic";
+            root.i-pitch-type-string = i-automatic-pitch-label;
         } else if (root.i-pitch-type == PitchType.Frequency) {
             root.i-pitch-type-index = 1;
-            root.i-pitch-type-string = "Frequency";
+            root.i-pitch-type-string = i-frequency-pitch-label;
         } else if (root.i-pitch-type == PitchType.AddMusicK) {
             root.i-pitch-type-index = 2;
-            root.i-pitch-type-string = "AddMusicK tuning";
+            root.i-pitch-type-string = i-addmusick-pitch-label;
         }
     }
 
@@ -163,7 +167,7 @@ export component SampleConfigWidget {
             spacing: 12px;
 
             Text {
-                text: "<no sample selected>";
+                text: @tr("sample config: config pane placeholder text" => "<no sample selected>");
                 vertical-alignment: center;
                 horizontal-alignment: center;
             }
@@ -180,7 +184,7 @@ export component SampleConfigWidget {
                 spacing: 12px;
 
                 Text {
-                    text: "Sample " + SampleUtils.format-hex(root.i-source) + ": " + root.i-name;
+                    text: @tr("sample config: sample source index and name" => "Sample {}: {}", SampleUtils.format-hex(root.i-source), root.i-name);
                     vertical-alignment: center;
                 }
                 Rectangle {
@@ -189,7 +193,7 @@ export component SampleConfigWidget {
                 ToolbarButton {
                     horizontal-stretch: 0.0;
                     icon: @image-url("save.svg");
-                    text: "Dump";
+                    text: @tr("sample config: dump sample button" => "Dump");
                     clicked => {
                         if (root.selected-sample-index != -1) {
                             root.dump-sample(root.sample-configs[root.selected-sample-index]);
@@ -203,7 +207,7 @@ export component SampleConfigWidget {
 
                 ToolbarButton {
                     icon: @image-url("8vb.svg");
-                    tooltip: "Decrease preview octave";
+                    tooltip: @tr("sample config: decrease preview piano octave button tooltip" => "Decrease preview octave");
                     clicked => {
                         if (root.i-piano-base-octave > 0) {
                             root.i-piano-base-octave = root.i-piano-base-octave - 1;
@@ -226,7 +230,7 @@ export component SampleConfigWidget {
                 }
                 ToolbarButton {
                     icon: @image-url("8va.svg");
-                    tooltip: "Increase preview octave";
+                    tooltip: @tr("sample config: increase preview piano octave button tooltip" => "Increase preview octave");
                     clicked => {
                         if (root.i-piano-base-octave < 7) {
                             root.i-piano-base-octave = root.i-piano-base-octave + 1;
@@ -266,12 +270,16 @@ export component SampleConfigWidget {
                 z: -5;
 
                 Text {
-                    text: "Pitch:";
+                    text: @tr("sample config: DSP VxPITCH register value label" => "Pitch:");
                     vertical-alignment: center;
                 }
                 ComboBox {
                     enabled: root.enabled;
-                    model: ["Automatic", "Frequency", "AddMusicK tuning"];
+                    model: [
+                        root.i-automatic-pitch-label,
+                        root.i-frequency-pitch-label,
+                        root.i-addmusick-pitch-label
+                    ];
                     current-index <=> root.i-pitch-type-index;
                     current-value <=> root.i-pitch-type-string;
                     selected => {
@@ -293,13 +301,13 @@ export component SampleConfigWidget {
                     }
                 }
                 if root.i-pitch-type == PitchType.Frequency: Text {
-                    text: "Hz";
+                    text: @tr("sample config: Hertz unit suffix" => "Hz");
                     vertical-alignment: center;
                 }
 
                 if root.i-pitch-type == PitchType.AddMusicK: LineEdit {
                     text <=> root.i-amk-tuning;
-                    placeholder-text: "Tuning";
+                    placeholder-text: @tr("sample config: AddMusicK tuning param (keep short!)" => "Tuning");
                     enabled: root.enabled;
                     width: 60px;
                     edited => {
@@ -310,7 +318,7 @@ export component SampleConfigWidget {
                 }
                 if root.i-pitch-type == PitchType.AddMusicK: LineEdit {
                     text <=> root.i-amk-subtuning;
-                    placeholder-text: "Sub.";
+                    placeholder-text: @tr("sample config: AddMusicK subtuning param (keep short!)" => "Sub.");
                     enabled: root.enabled;
                     width: 60px;
                     edited => {
@@ -325,7 +333,7 @@ export component SampleConfigWidget {
                 alignment: stretch;
 
                 CheckBox {
-                    text: "Per-sample color:";
+                    text: @tr("sample config: per-sample color selector label" => "Per-sample color:");
                     enabled: root.enabled;
                     checked <=> root.i-use-color;
                     toggled => {

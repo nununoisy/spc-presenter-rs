@@ -202,7 +202,7 @@ pub struct SampleProcessor {
 
 impl SampleProcessor {
     pub fn from_spc<P: AsRef<Path>>(spc_path: P) -> Result<Self> {
-        let mut emulator = Emulator::from_spc(spc_path)?;
+        let mut emulator = Emulator::from_spc(spc_path, 44_100)?;
         emulator.init();
 
         let total_frames = match emulator.get_spc_metadata() {
@@ -223,6 +223,10 @@ impl SampleProcessor {
             detected_sources: HashMap::new(),
             processing_queue: VecDeque::new()
         })
+    }
+
+    pub fn set_frame_count(&mut self, frame_count: usize) {
+        self.total_frames = frame_count;
     }
 
     fn determine_progress(&self) -> SampleProcessorProgress {

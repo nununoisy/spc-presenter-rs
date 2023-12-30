@@ -1,3 +1,4 @@
+use crate::emulator::snes_apu::dsp::dsp_helpers;
 use super::dsp::Dsp;
 
 enum Mode {
@@ -10,6 +11,7 @@ enum Mode {
 pub struct Envelope {
     dsp: *mut Dsp,
 
+    pub l_adsr0: u8,
     pub adsr0: u8,
     pub adsr1: u8,
     pub gain: u8,
@@ -24,6 +26,7 @@ impl Envelope {
         Envelope {
             dsp: dsp,
 
+            l_adsr0: 0,
             adsr0: 0,
             adsr1: 0,
             gain: 0,
@@ -43,8 +46,6 @@ impl Envelope {
 
     pub fn key_on(&mut self) {
         self.mode = Mode::Attack;
-        self.level = 0;
-        self.hidden_level = 0;
     }
 
     pub fn key_off(&mut self) {
@@ -57,85 +58,82 @@ impl Envelope {
     }
 
     pub fn tick(&mut self) {
+        self.adsr0 = self.l_adsr0;
+
         let mut env = self.level;
-        match self.mode {
-            Mode::Release => {
-                env -= 8;
-                if env < 0 {
-                    env = 0;
-                }
-                self.level = env;
-            },
-            _ => {
-                let rate: i32;
-                let env_data = self.adsr1 as i32;
-                if (self.adsr0 & 0x80) != 0 {
-                    // Adsr mode
+        if let Mode::Release = self.mode {
+            self.level = (env - 8).max(0);
+            return;
+        }
+
+        let rate: i32;
+        let env_data: i32;
+        if (self.adsr0 & 0x80) != 0 {
+            // ADSR mode
+            env_data = self.adsr1 as i32;
+            match self.mode {
+                Mode::Attack => {
+                    rate = ((self.adsr0 as i32) & 0x0f) * 2 + 1;
+                    env += if rate < 31 { 0x20 } else { 0x400 };
+                },
+                _ => {
+                    env -= 1;
+                    env -= env >> 8;
                     match self.mode {
-                        Mode::Attack => {
-                            rate = ((self.adsr0 as i32) & 0x0f) * 2 + 1;
-                            env += if rate < 31 { 0x20 } else { 0x400 };
+                        Mode::Decay => {
+                            rate = (((self.adsr0 as i32) >> 3) & 0x0e) + 0x10;
                         },
                         _ => {
-                            env -= 1;
-                            env -= env >> 8;
-                            match self.mode {
-                                Mode::Decay => {
-                                    rate = (((self.adsr0 as i32) >> 3) & 0x0e) + 0x10;
-                                },
-                                _ => {
-                                    rate = env_data & 0x1f;
-                                }
-                            }
+                            rate = env_data & 0x1f;
                         }
                     }
+                }
+            }
+        } else {
+            // Gain mode
+            env_data = self.gain as i32;
+            let mode = env_data >> 5;
+            if mode < 4 {
+                // Direct
+                env = env_data * 0x10;
+                rate = 31;
+            } else {
+                rate = env_data & 0x1f;
+                if mode == 4 {
+                    // Linear decrease
+                    env -= 0x20;
+                } else if mode < 6 {
+                    // Exponential decrease
+                    env -= 1;
+                    env -= env >> 8;
                 } else {
-                    // Gain mode
-                    let mode = self.gain >> 5;
-                    if mode < 4 {
-                        // Direct
-                        env = (self.gain as i32) * 0x10;
-                        rate = 31;
-                    } else {
-                        rate = (self.gain as i32) & 0x1f;
-                        if mode == 4 {
-                            // Linear decrease
-                            env -= 0x20;
-                        } else if mode < 6 {
-                            // Exponential decrease
-                            env -= 1;
-                            env -= env >> 8;
-                        } else {
-                            // Linear increase
-                            env += 0x20;
-                            if mode > 6 && (self.hidden_level as u32) >= 0x600 {
-                                env += 0x08 - 0x20;
-                            }
-                        }
+                    // Linear increase
+                    env += 0x20;
+                    if mode > 6 && (self.hidden_level as u32) >= 0x600 {
+                        env += 0x08 - 0x20;
                     }
                 }
-
-                if let Mode::Decay = self.mode {
-                    if (env >> 8) == (env_data >> 5) {
-                        self.mode = Mode::Sustain;
-                    }
-                }
-
-                self.hidden_level = env; // Super obscure quirk thingy here
-
-                // Unsigned because env < 0 should also trigger this logic
-                if (env as u32) > 0x07ff {
-                    env = if env < 0 { 0 } else { 0x07ff };
-                    if let Mode::Attack = self.mode {
-                        self.mode = Mode::Decay;
-                    }
-                }
-
-                if self.dsp().read_counter(rate) {
-                    return;
-                }
-                self.level = env;
             }
         }
+
+        if let Mode::Decay = self.mode {
+            if (env >> 8) == (env_data >> 5) {
+                self.mode = Mode::Sustain;
+            }
+        }
+
+        self.hidden_level = env; // Super obscure quirk thingy here
+
+        if (env as u32) > 0x07ff {
+            env = env.clamp(0, 0x7ff);
+            if let Mode::Attack = self.mode {
+                self.mode = Mode::Decay;
+            }
+        }
+
+        if self.dsp().read_counter(rate) {
+            return;
+        }
+        self.level = env;
     }
 }

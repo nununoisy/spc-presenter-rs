@@ -261,7 +261,7 @@ impl Smp {
 
     fn adjust_dpw(&mut self, x: u16) {
         let mut addr = self.read_pc();
-        let mut result = (self.read_dp(addr) as u16) + x;
+        let mut result = (self.read_dp(addr) as u16).wrapping_add(x);
         self.write_dp(addr, result as u8);
         addr = addr.wrapping_add(1);
         let mut high = (result >> 8) as u8;

@@ -1,0 +1,226 @@
+import { VerticalBox } from "std-widgets.slint";
+import { SampleUtils } from "./sample-config.slint";
+
+export enum ProgressType {
+    Initial,
+    RenderError,
+    RenderStarting,
+    Rendering,
+    RenderFinished,
+    RenderCancelled,
+    ProcessorError,
+    ProcessorStarting,
+    Processing,
+    ProcessorFinished,
+    ProcessorCancelled
+}
+
+export struct ProgressInfo {
+    progress-type: ProgressType,
+    progress: float,
+    error: string,
+    // render
+    fps: int,
+    encoded-duration: duration,
+    expected-duration: duration,
+    video-size: int,
+    eta: duration,
+    // process
+    source: int,
+    current-sample: int,
+    total-samples: int
+}
+
+export global ProgressUtils {
+    pure function format-duration-component(c: int) -> string {
+        if (c < 10) {
+            @tr("formatted duration number (< 10)" => "0{}", c)
+        } else {
+            @tr("formatted duration number (>= 10)" => "{}", c)
+        }
+    }
+
+    pure public function format-duration(d: duration) -> string {
+        if (d == -1ms) {
+            @tr("error duration" => "<error>")
+        } else if (d < 0s) {
+            @tr("unknown formatted duration" => "<unknown>")
+        } else {
+            @tr("formatted duration" => "{}:{}:{}", format-duration-component(Math.floor(d / 3600s)), format-duration-component(Math.floor(Math.mod(d / 60s, 60))), format-duration-component(Math.floor(Math.mod(d / 1s, 60))))
+        }
+    }
+
+    pure public function humanize-duration(d: duration) -> string {
+        if (d < 0s) {
+            @tr("unknown humanized duration" => "unknown time remaining")
+        } else if (d / 3600s >= 1) {
+            @tr("humanized duration (hours)" => "{n} hour remaining" | "{n} hours remaining" % Math.floor(d / 3600s))
+        } else if (d / 60s >= 1) {
+            @tr("humanized duration (minutes)" => "{n} minute remaining" | "{n} minutes remaining" % Math.floor(d / 60s))
+        } else if (d / 1s >= 1) {
+            @tr("humanized duration (seconds)" => "{n} second remaining" | "{n} seconds remaining" % Math.floor(d / 1s))
+        } else {
+            @tr("humanized duration (less than a second)" => "less than a second remaining")
+        }
+    }
+
+    pure public function humanize-size(b: int) -> string {
+        if (b >= 1073741824) {
+            @tr("humanized size (gibibytes)" => "{} GiB", Math.round(b / 10737418.24) / 100)
+        } else if (b >= 1048576) {
+            @tr("humanized size (mebibytes)" => "{} MiB", Math.round(b / 10485.76) / 100)
+        } else if (b >= 1024) {
+            @tr("humanized size (kibibytes)" => "{} KiB", Math.round(b / 10.24) / 100)
+        } else {
+            @tr("humanized size (bytes)" => "{} B", b)
+        }
+    }
+}
+
+export component Progress {
+    in property <ProgressInfo> progress-info;
+
+    property<float> i-progress-anim-tick: -cos(180deg * mod(animation-tick() / 1.3s, 2) / 2) + 1;
+
+    pure function progress-title() -> string {
+        if (root.progress-info.progress-type == ProgressType.RenderStarting || root.progress-info.progress-type == ProgressType.ProcessorStarting) {
+            @tr("progress: starting" => "Setting up")
+        } else if (root.progress-info.progress-type == ProgressType.Rendering) {
+            if (root.progress-info.expected-duration >= 0s) {
+                @tr("progress: rendering" => "Rendering")
+            } else if (root.progress-info.encoded-duration >= 0s) {
+                @tr("progress: rendering to loop point" => "Rendering to loop point")
+            } else {
+                @tr("progress: initializing" => "Initializing")
+            }
+        } else if (root.progress-info.progress-type == ProgressType.Processing) {
+            if (root.progress-info.current-sample == 0) {
+                @tr("progress: detecting samples" => "Detecting samples")
+            } else {
+                @tr("progress: processing samples" => "Processing samples")
+            }
+        } else {
+            @tr("progress: idle" => "Idle")
+        }
+    }
+
+    pure function progress-status() -> string {
+        if (root.progress-info.progress-type == ProgressType.RenderError) {
+            @tr("progress status: render error" => "Render error: {}", root.progress-info.error)
+        } else if (root.progress-info.progress-type == ProgressType.RenderStarting) {
+            @tr("progress status: render starting" => "Preparing your music")
+        } else if (root.progress-info.progress-type == ProgressType.Rendering) {
+            @tr("progress status: rendering" => "{}%, {} FPS, encoded {}/{} ({}), {}",
+                Math.round(root.progress-info.progress * 100.0),
+                root.progress-info.fps,
+                ProgressUtils.format-duration(root.progress-info.encoded-duration),
+                ProgressUtils.format-duration(root.progress-info.expected-duration),
+                ProgressUtils.humanize-size(root.progress-info.video-size),
+                ProgressUtils.humanize-duration(root.progress-info.eta))
+        } else if (root.progress-info.progress-type == ProgressType.RenderFinished) {
+            @tr("progress status: render finished" => "Render finished")
+        } else if (root.progress-info.progress-type == ProgressType.RenderCancelled) {
+            @tr("progress status: render cancelled" => "Render cancelled")
+        } else if (root.progress-info.progress-type == ProgressType.ProcessorError) {
+            @tr("progress status: processor error" => "Processor error: {}", root.progress-info.error)
+        } else if (root.progress-info.progress-type == ProgressType.ProcessorStarting) {
+            @tr("progress status: processor starting" => "Preparing to detect samples")
+        } else if (root.progress-info.progress-type == ProgressType.Processing && root.progress-info.current-sample == 0) {
+            @tr("progress status: detecting samples" => "{}%, found {}",
+                Math.round(root.progress-info.progress * 100.0),
+                @tr("progress status: detected sample count" => "{n} sample" | "{n} samples" % root.progress-info.total-samples))
+        } else if (root.progress-info.progress-type == ProgressType.Processing && root.progress-info.current-sample != 0) {
+            @tr("progress status: processing samples" => "{}%, processing sample {} ({}/{})",
+                Math.round(root.progress-info.progress * 100.0),
+                SampleUtils.format-hex(root.progress-info.source),
+                root.progress-info.current-sample,
+                root.progress-info.total-samples)
+        } else if (root.progress-info.progress-type == ProgressType.ProcessorFinished) {
+            @tr("progress status: processor finished" => "Processing finished")
+        } else if (root.progress-info.progress-type == ProgressType.ProcessorCancelled) {
+            @tr("progress status: processor cancelled" => "Processing cancelled")
+        } else {
+            ""
+        }
+    }
+
+    pure function progress-indeterminate() -> bool {
+        root.progress-info.progress-type == ProgressType.RenderStarting || root.progress-info.progress-type == ProgressType.ProcessorStarting || (root.progress-info.progress-type == ProgressType.Rendering && root.progress-info.expected-duration <= 0s)
+    }
+
+    pure function progress-error() -> bool {
+        root.progress-info.progress-type == ProgressType.RenderError || root.progress-info.progress-type == ProgressType.ProcessorError
+    }
+
+    VerticalBox {
+        alignment: start;
+        spacing: 8px;
+
+        Text {
+            text: root.progress-title();
+            font-size: 16px;
+        }
+        Rectangle {
+            height: 6px;
+            clip: true;
+
+            border-radius: 3px;
+            background: #313131;  // Palette.neutralLighter
+
+            if !root.progress-indeterminate(): Rectangle {
+                x: 0;
+                y: 0;
+                height: parent.height;
+                width: Math.max(0.0, Math.min(root.progress-info.progress, 1.0)) * parent.width;
+
+                border-width: 1px;
+                border-radius: 3px;
+                border-color: root.progress-error() ? #bc2f32 : #60cdff;  // Palette.themePrimary
+                background: root.progress-error() ? #bc2f32 : #60cdff;  // Palette.themePrimary
+
+                animate width {
+                    duration: 100ms;
+                    easing: ease-in-out;
+                }
+            }
+            if root.progress-indeterminate(): Rectangle {
+                x: (4 * (root.i-progress-anim-tick / 1.4) - 1) * parent.width;
+                y: 0;
+                height: parent.height;
+                width: 0.5 * parent.width;
+
+                border-width: 1px;
+                border-radius: 3px;
+                border-color: root.i-progress-anim-tick > 1.4 ? transparent : #60cdff;  // Palette.themePrimary
+                background: root.i-progress-anim-tick > 1.4 ? transparent : #60cdff;  // Palette.themePrimary
+            }
+            if root.progress-indeterminate(): Rectangle {
+                x: (3.1666 * ((root.i-progress-anim-tick - 0.6) / 1.4) - 1.5) * parent.width;
+                y: 0;
+                height: parent.height;
+                width: 0.8 * parent.width;
+
+                border-width: 1px;
+                border-radius: 3px;
+                border-color: root.i-progress-anim-tick < 0.6 ? transparent : #60cdff;  // Palette.themePrimary
+                background: root.i-progress-anim-tick < 0.6 ? transparent : #60cdff;  // Palette.themePrimary
+            }
+        }
+        HorizontalLayout {
+            alignment: start;
+            spacing: 6px;
+
+            if root.progress-error(): Image {
+                colorize: #bc2f32;
+                height: 16px;
+                width: 16px;
+                source: @image-url("circle-error.svg");
+            }
+            Text {
+                text: root.progress-status();
+                color: root.progress-error() ? #bc2f32 : #ffffff;
+                vertical-alignment: center;
+            }
+        }
+    }
+}

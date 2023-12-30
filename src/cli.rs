@@ -181,6 +181,9 @@ fn get_renderer_options() -> RendererOptions {
     };
 
     let mut sample_processor = SampleProcessor::from_spc(options.input_path.clone()).expect("Failed to initialize sample processor");
+    if let StopCondition::Frames(frames) = options.stop_condition {
+        sample_processor.set_frame_count(frames as usize + options.fadeout_length as usize + 60);
+    }
     loop {
         match sample_processor.step().unwrap() {
             SampleProcessorProgress::Finished => break,

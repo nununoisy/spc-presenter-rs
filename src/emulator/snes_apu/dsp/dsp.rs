@@ -43,7 +43,7 @@ pub struct Dsp {
     echo_start_address: u16,
     echo_delay: u8,
     kon_cache: u8,
-    koff_cache: u8,
+    kof_cache: u8,
 
     counter: i32,
 
@@ -62,7 +62,7 @@ impl Dsp {
     pub fn new(emulator: *mut Apu) -> Box<Dsp> {
         let resampling_mode = ResamplingMode::Gaussian;
         let mut ret = Box::new(Dsp {
-            emulator: emulator,
+            emulator,
 
             voices: Vec::with_capacity(NUM_VOICES),
 
@@ -70,18 +70,18 @@ impl Dsp {
             right_filter: Filter::new(),
             output_buffer: RingBuffer::new(),
 
-            vol_left: 0x89,
-            vol_right: 0x9c,
-            echo_vol_left: 0x9f,
-            echo_vol_right: 0x9c,
+            vol_left: 0,
+            vol_right: 0,
+            echo_vol_left: 0,
+            echo_vol_right: 0,
             noise_clock: 0,
             echo_write_enabled: false,
             echo_feedback: 0,
             source_dir: 0,
-            echo_start_address: Dsp::calculate_echo_start_address(0x60),
-            echo_delay: 0x0e,
+            echo_start_address: 0,
+            echo_delay: 0,
             kon_cache: 0,
-            koff_cache: 0,
+            kof_cache: 0,
 
             counter: 0,
 
@@ -91,7 +91,7 @@ impl Dsp {
             echo_pos: 0,
             echo_length: 0,
 
-            resampling_mode: resampling_mode,
+            resampling_mode,
 
             state_receiver: None
         });
@@ -146,7 +146,7 @@ impl Dsp {
         for i in 0..REG_LEN {
             match i {
                 0x4c | 0x5c => (), // Do nothing
-                _ => { self.set_register(i as u8, spc.regs[i as usize]); }
+                _ => { self.set_register(i as u8, spc.regs[i]); }
             }
         }
 
@@ -206,8 +206,8 @@ impl Dsp {
 
             let echo_address = (self.echo_start_address.wrapping_add(self.echo_pos as u16)) as u32;
             // println!("ECHO_ADDR=${:04x} ECHO_LEN=${:04x} ESA=${:04x} EDL=${:02x}\n\n\n", echo_address, self.echo_length, self.echo_start_address, self.echo_delay);
-            let mut left_echo_in = (((((self.emulator().read_u8(echo_address + 1) as i32) << 8) | (self.emulator().read_u8(echo_address) as i32)) as i16) & !1) as i32;
-            let mut right_echo_in = (((((self.emulator().read_u8(echo_address + 3) as i32) << 8) | (self.emulator().read_u8(echo_address + 2) as i32)) as i16) & !1) as i32;
+            let mut left_echo_in = ((((self.emulator().read_u8(echo_address + 1) as i32) << 8) | (self.emulator().read_u8(echo_address) as i32)) as i16) as i32;
+            let mut right_echo_in = ((((self.emulator().read_u8(echo_address + 3) as i32) << 8) | (self.emulator().read_u8(echo_address + 2) as i32)) as i16) as i32;
 
             left_echo_in = dsp_helpers::clamp(self.left_filter.next(left_echo_in, false)) & !1;
             right_echo_in = dsp_helpers::clamp(self.right_filter.next(right_echo_in, true)) & !1;
@@ -215,6 +215,14 @@ impl Dsp {
             let left_out = dsp_helpers::clamp(dsp_helpers::cast_arb_int(left_out + dsp_helpers::multiply_volume(left_echo_in, self.echo_vol_left), 17)) as i16;
             let right_out = dsp_helpers::clamp(dsp_helpers::cast_arb_int(right_out + dsp_helpers::multiply_volume(right_echo_in, self.echo_vol_right), 17)) as i16;
             self.output_buffer.write_sample(left_out, right_out);
+
+            if self.echo_pos == 0 {
+                self.echo_length = self.calculate_echo_length();
+            }
+            self.echo_pos += 4;
+            if self.echo_pos >= self.echo_length {
+                self.echo_pos = 0;
+            }
 
             if self.echo_write_enabled {
                 left_echo_out = dsp_helpers::clamp(dsp_helpers::cast_arb_int(left_echo_out + ((((left_echo_in * ((self.echo_feedback as i8) as i32)) >> 7) as i16) as i32), 17)) & !1;
@@ -224,13 +232,6 @@ impl Dsp {
                 self.emulator().write_u8(echo_address + 1, (left_echo_out >> 8) as u8);
                 self.emulator().write_u8(echo_address + 2, right_echo_out as u8);
                 self.emulator().write_u8(echo_address + 3, (right_echo_out >> 8) as u8);
-            }
-            if self.echo_pos == 0 {
-                self.echo_length = self.calculate_echo_length();
-            }
-            self.echo_pos += 4;
-            if self.echo_pos >= self.echo_length {
-                self.echo_pos = 0;
             }
 
             if self.counter == 0 {
@@ -287,7 +288,7 @@ impl Dsp {
                     0x02 => { voice.pitch_low = value; },
                     0x03 => { voice.set_pitch_high(value); },
                     0x04 => { voice.source = value; voice.edge_hit = true; },
-                    0x05 => { voice.envelope.adsr0 = value; },
+                    0x05 => { voice.envelope.l_adsr0 = value; },
                     0x06 => { voice.envelope.adsr1 = value; },
                     0x07 => { voice.envelope.gain = value; },
                     _ => () // Do nothing
@@ -351,7 +352,7 @@ impl Dsp {
                 0x2c => self.echo_vol_left,
                 0x3c => self.echo_vol_right,
                 0x4c => self.kon_cache,
-                0x5c => self.koff_cache,
+                0x5c => self.kof_cache,
                 0x6c => self.get_flg(),
                 0x7c => self.get_endx(),
 
@@ -368,6 +369,9 @@ impl Dsp {
     }
 
     pub fn read_counter(&self, rate: i32) -> bool {
+        if rate == 0 {
+            return true;
+        }
         ((self.counter + COUNTER_OFFSETS[rate as usize]) % COUNTER_RATES[rate as usize]) != 0
     }
 
@@ -391,17 +395,15 @@ impl Dsp {
         self.kon_cache = voice_mask;
         for i in 0..NUM_VOICES {
             if ((voice_mask as usize) & (1 << i)) != 0 {
-                self.voices[i].key_on();
+                self.voices[i].kon_queued = true;
             }
         }
     }
 
     fn set_kof(&mut self, voice_mask: u8) {
-        self.koff_cache = voice_mask;
+        self.kof_cache = voice_mask;
         for i in 0..NUM_VOICES {
-            if ((voice_mask as usize) & (1 << i)) != 0 {
-                self.voices[i].key_off();
-            }
+            self.voices[i].kof_queued = ((voice_mask as usize) & (1 << i)) != 0;
         }
     }
 
