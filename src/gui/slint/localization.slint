@@ -1,0 +1,19 @@
+export struct LocalizationArg {
+    id: string,
+    is-int: bool,
+    s-value: string,
+    i-value: int
+}
+
+export global Localization {
+    public pure function arg(id: string, value: string) -> LocalizationArg {
+        { id: id, is-int: false, s-value: value, i-value: 0 }
+    }
+
+    public pure function int-arg(id: string, value: int) -> LocalizationArg {
+        { id: id, is-int: true, s-value: "", i-value: value }
+    }
+
+    pure callback tr(string) -> string;
+    pure callback tr-args(string, [LocalizationArg]) -> string;
+}

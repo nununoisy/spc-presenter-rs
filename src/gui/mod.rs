@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
+use std::env;
 use anyhow::Result;
-use indicatif::{FormattedDuration, HumanBytes, HumanDuration};
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 use slint;
 use slint::Model as _;
@@ -16,6 +16,7 @@ use tiny_skia::Color;
 use render_thread::{RenderThreadMessage, RenderThreadRequest};
 use sample_processing_thread::{SampleProcessingThreadMessage, SampleProcessingThreadRequest};
 use audio_previewer::{AudioPreviewer, audio_stopped_timer};
+use fluent::FluentArgs;
 use crate::config::Config;
 use crate::emulator::ResamplingMode;
 use crate::renderer::render_options::{RendererOptions, StopCondition};
@@ -241,8 +242,6 @@ fn slint_optional_duration(duration: Option<Duration>) -> i64 {
 }
 
 pub fn run() {
-    localization::init_localization();
-
     let main_window = MainWindow::new().unwrap();
 
     main_window.global::<ColorUtils>().on_hex_to_color(|hex| {
@@ -270,6 +269,52 @@ pub fn run() {
     main_window.global::<SampleUtils>().on_format_hex(|i| {
         format!("${:02x}", i).into()
     });
+
+    let localization_adapter = Arc::new(Mutex::new(localization::LocalizationAdapter::new()));
+    if let Ok(language) = env::var("PRESENTER_LANG") {
+        localization_adapter.lock().unwrap().set_language(&language);
+    }
+
+    {
+        let localization_adapter = localization_adapter.clone();
+        main_window.global::<Localization>().on_tr(move |message_id| {
+            let localization_adapter = localization_adapter.lock().unwrap();
+            let bundle = localization_adapter.bundle();
+
+            if let Some(message) = bundle.get_message(message_id.as_str()) {
+                if let Some(pattern) = message.value() {
+                    let mut errors = Vec::new();
+                    return bundle.format_pattern(&pattern, None, &mut errors).to_string().into();
+                }
+            }
+            message_id.clone()
+        });
+    }
+
+    {
+        let localization_adapter = localization_adapter.clone();
+        main_window.global::<Localization>().on_tr_args(move |message_id, args| {
+            let localization_adapter = localization_adapter.lock().unwrap();
+            let bundle = localization_adapter.bundle();
+
+            let mut fluent_args = FluentArgs::new();
+            for arg in args.as_any().downcast_ref::<slint::VecModel<LocalizationArg>>().unwrap().iter() {
+                if arg.is_int {
+                    fluent_args.set(arg.id.to_string(), arg.i_value);
+                } else {
+                    fluent_args.set(arg.id.to_string(), arg.s_value.to_string());
+                }
+            }
+
+            if let Some(message) = bundle.get_message(message_id.as_str()) {
+                if let Some(pattern) = message.value() {
+                    let mut errors = Vec::new();
+                    return bundle.format_pattern(&pattern, Some(&fluent_args), &mut errors).to_string().into();
+                }
+            }
+            message_id.clone()
+        });
+    }
 
     main_window.set_version(env!("CARGO_PKG_VERSION").into());
     main_window.set_ffmpeg_version(crate::video_builder::ffmpeg_version().into());

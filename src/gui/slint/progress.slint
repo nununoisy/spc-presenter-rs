@@ -1,5 +1,6 @@
 import { VerticalBox } from "std-widgets.slint";
 import { SampleUtils } from "./sample-config.slint";
+import { Localization } from "./localization.slint";
 
 export enum ProgressType {
     Initial,
@@ -34,45 +35,67 @@ export struct ProgressInfo {
 export global ProgressUtils {
     pure function format-duration-component(c: int) -> string {
         if (c < 10) {
-            @tr("formatted duration number (< 10)" => "0{}", c)
+            Localization.tr-args("formatted-duration-component-lt10", [
+                Localization.int-arg("n", c)
+            ])
         } else {
-            @tr("formatted duration number (>= 10)" => "{}", c)
+            Localization.tr-args("formatted-duration-component-ge10", [
+                Localization.int-arg("n", c)
+            ])
         }
     }
 
     pure public function format-duration(d: duration) -> string {
         if (d == -1ms) {
-            @tr("error duration" => "<error>")
+            Localization.tr("formatted-duration-error")
         } else if (d < 0s) {
-            @tr("unknown formatted duration" => "<unknown>")
+            Localization.tr("formatted-duration-unknown")
         } else {
-            @tr("formatted duration" => "{}:{}:{}", format-duration-component(Math.floor(d / 3600s)), format-duration-component(Math.floor(Math.mod(d / 60s, 60))), format-duration-component(Math.floor(Math.mod(d / 1s, 60))))
+            Localization.tr-args("formatted-duration", [
+                Localization.arg("hours", format-duration-component(Math.floor(d / 3600s))),
+                Localization.arg("minutes", format-duration-component(Math.floor(Math.mod(d / 60s, 60)))),
+                Localization.arg("seconds", format-duration-component(Math.floor(Math.mod(d / 1s, 60))))
+            ])
         }
     }
 
     pure public function humanize-duration(d: duration) -> string {
         if (d < 0s) {
-            @tr("unknown humanized duration" => "unknown time remaining")
+            Localization.tr("remaining-duration-unknown")
         } else if (d / 3600s >= 1) {
-            @tr("humanized duration (hours)" => "{n} hour remaining" | "{n} hours remaining" % Math.floor(d / 3600s))
+            Localization.tr-args("remaining-duration-hours", [
+                Localization.int-arg("n", Math.floor(d / 3600s))
+            ])
         } else if (d / 60s >= 1) {
-            @tr("humanized duration (minutes)" => "{n} minute remaining" | "{n} minutes remaining" % Math.floor(d / 60s))
+            Localization.tr-args("remaining-duration-minutes", [
+                Localization.int-arg("n", Math.floor(d / 60s))
+            ])
         } else if (d / 1s >= 1) {
-            @tr("humanized duration (seconds)" => "{n} second remaining" | "{n} seconds remaining" % Math.floor(d / 1s))
+            Localization.tr-args("remaining-duration-seconds", [
+                Localization.int-arg("n", Math.floor(d / 1s))
+            ])
         } else {
-            @tr("humanized duration (less than a second)" => "less than a second remaining")
+            Localization.tr("remaining-duration-less-than-a-second")
         }
     }
 
     pure public function humanize-size(b: int) -> string {
         if (b >= 1073741824) {
-            @tr("humanized size (gibibytes)" => "{} GiB", Math.round(b / 10737418.24) / 100)
+            Localization.tr-args("file-size-gibibytes", [
+                Localization.int-arg("n", Math.round(b / 10737418.24) / 100)
+            ])
         } else if (b >= 1048576) {
-            @tr("humanized size (mebibytes)" => "{} MiB", Math.round(b / 10485.76) / 100)
+            Localization.tr-args("file-size-mebibytes", [
+                Localization.int-arg("n", Math.round(b / 10485.76) / 100)
+            ])
         } else if (b >= 1024) {
-            @tr("humanized size (kibibytes)" => "{} KiB", Math.round(b / 10.24) / 100)
+            Localization.tr-args("file-size-kibibytes", [
+                Localization.int-arg("n", Math.round(b / 10.24) / 100)
+            ])
         } else {
-            @tr("humanized size (bytes)" => "{} B", b)
+            Localization.tr-args("file-size-bytes", [
+                Localization.int-arg("n", b)
+            ])
         }
     }
 }
@@ -84,61 +107,68 @@ export component Progress {
 
     pure function progress-title() -> string {
         if (root.progress-info.progress-type == ProgressType.RenderStarting || root.progress-info.progress-type == ProgressType.ProcessorStarting) {
-            @tr("progress: starting" => "Setting up")
+            Localization.tr("progress-title-starting")
         } else if (root.progress-info.progress-type == ProgressType.Rendering) {
             if (root.progress-info.expected-duration >= 0s) {
-                @tr("progress: rendering" => "Rendering")
+                Localization.tr("progress-title-rendering")
             } else if (root.progress-info.encoded-duration >= 0s) {
-                @tr("progress: rendering to loop point" => "Rendering to loop point")
+                Localization.tr("progress-title-rendering-to-loop-point")
             } else {
-                @tr("progress: initializing" => "Initializing")
+                Localization.tr("progress-title-rendering-initializing")
             }
         } else if (root.progress-info.progress-type == ProgressType.Processing) {
             if (root.progress-info.current-sample == 0) {
-                @tr("progress: detecting samples" => "Detecting samples")
+                Localization.tr("progress-title-processing-detecting-samples")
             } else {
-                @tr("progress: processing samples" => "Processing samples")
+                Localization.tr("progress-title-processing-processing-samples")
             }
         } else {
-            @tr("progress: idle" => "Idle")
+            Localization.tr("progress-title-idle")
         }
     }
 
     pure function progress-status() -> string {
         if (root.progress-info.progress-type == ProgressType.RenderError) {
-            @tr("progress status: render error" => "Render error: {}", root.progress-info.error)
+            Localization.tr-args("progress-status-render-error", [
+                Localization.arg("error", root.progress-info.error)
+            ])
         } else if (root.progress-info.progress-type == ProgressType.RenderStarting) {
-            @tr("progress status: render starting" => "Preparing your music")
+            Localization.tr("progress-status-render-starting")
         } else if (root.progress-info.progress-type == ProgressType.Rendering) {
-            @tr("progress status: rendering" => "{}%, {} FPS, encoded {}/{} ({}), {}",
-                Math.round(root.progress-info.progress * 100.0),
-                root.progress-info.fps,
-                ProgressUtils.format-duration(root.progress-info.encoded-duration),
-                ProgressUtils.format-duration(root.progress-info.expected-duration),
-                ProgressUtils.humanize-size(root.progress-info.video-size),
-                ProgressUtils.humanize-duration(root.progress-info.eta))
+            Localization.tr-args("progress-status-rendering", [
+                Localization.arg("progress", Math.round(root.progress-info.progress * 100)),
+                Localization.int-arg("fps", root.progress-info.fps),
+                Localization.arg("encodedDuration", ProgressUtils.format-duration(root.progress-info.encoded-duration)),
+                Localization.arg("expectedDuration", ProgressUtils.format-duration(root.progress-info.expected-duration)),
+                Localization.arg("videoSize", ProgressUtils.humanize-size(root.progress-info.video-size)),
+                Localization.arg("eta", ProgressUtils.humanize-duration(root.progress-info.eta)),
+            ])
         } else if (root.progress-info.progress-type == ProgressType.RenderFinished) {
-            @tr("progress status: render finished" => "Render finished")
+            Localization.tr("progress-status-render-finished")
         } else if (root.progress-info.progress-type == ProgressType.RenderCancelled) {
-            @tr("progress status: render cancelled" => "Render cancelled")
+            Localization.tr("progress-status-render-cancelled")
         } else if (root.progress-info.progress-type == ProgressType.ProcessorError) {
-            @tr("progress status: processor error" => "Processor error: {}", root.progress-info.error)
+            Localization.tr-args("progress-status-processor-error", [
+                Localization.arg("error", root.progress-info.error)
+            ])
         } else if (root.progress-info.progress-type == ProgressType.ProcessorStarting) {
-            @tr("progress status: processor starting" => "Preparing to detect samples")
+            Localization.tr("progress-status-processor-starting")
         } else if (root.progress-info.progress-type == ProgressType.Processing && root.progress-info.current-sample == 0) {
-            @tr("progress status: detecting samples" => "{}%, found {}",
-                Math.round(root.progress-info.progress * 100.0),
-                @tr("progress status: detected sample count" => "{n} sample" | "{n} samples" % root.progress-info.total-samples))
+            Localization.tr-args("progress-status-processing-detecting-samples", [
+                Localization.arg("progress", Math.round(root.progress-info.progress * 100)),
+                Localization.int-arg("detectedSamples", root.progress-info.total-samples)
+            ])
         } else if (root.progress-info.progress-type == ProgressType.Processing && root.progress-info.current-sample != 0) {
-            @tr("progress status: processing samples" => "{}%, processing sample {} ({}/{})",
-                Math.round(root.progress-info.progress * 100.0),
-                SampleUtils.format-hex(root.progress-info.source),
-                root.progress-info.current-sample,
-                root.progress-info.total-samples)
+            Localization.tr-args("progress-status-processing-processing-samples", [
+                Localization.arg("progress", Math.round(root.progress-info.progress * 100)),
+                Localization.arg("sourceIndex", SampleUtils.format-hex(root.progress-info.source)),
+                Localization.int-arg("currentSample", root.progress-info.current-sample),
+                Localization.int-arg("totalSamples", root.progress-info.total-samples)
+            ])
         } else if (root.progress-info.progress-type == ProgressType.ProcessorFinished) {
-            @tr("progress status: processor finished" => "Processing finished")
+            Localization.tr("progress-status-processor-finished")
         } else if (root.progress-info.progress-type == ProgressType.ProcessorCancelled) {
-            @tr("progress status: processor cancelled" => "Processing cancelled")
+            Localization.tr("progress-status-processor-cancelled")
         } else {
             ""
         }
