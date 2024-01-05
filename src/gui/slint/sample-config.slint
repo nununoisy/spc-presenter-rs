@@ -33,7 +33,7 @@ export component SampleConfigWidget {
 
     property <int> selected-sample-index: -1;
 
-    property <string> i-name: "<no name>";
+    property <string> i-name: Localization.tr("tuning-sample-name-placeholder");
     property <int> i-source: 0;
     property <int> i-pitch-type-index: 0;
     property <string> i-pitch-type-string: Localization.tr("tuning-pitch-type-automatic");
@@ -101,7 +101,11 @@ export component SampleConfigWidget {
         root.i-sample-preview-pitch-text = "$1000";
         root.i-piano-base-octave = 3;
         if (root.selected-sample-index != -1) {
-            root.i-name = root.sample-configs[root.selected-sample-index].name;
+            if (root.sample-configs[root.selected-sample-index].name != "") {
+                root.i-name = root.sample-configs[root.selected-sample-index].name;
+            } else {
+                root.i-name = Localization.tr("tuning-sample-name-placeholder");
+            }
             root.i-source = root.sample-configs[root.selected-sample-index].source;
             root.i-pitch-type = root.sample-configs[root.selected-sample-index].pitch-type;
             root.i-update-pitch-type-index();

@@ -1,25 +1,27 @@
+use multiversion::multiversion;
 use std::convert::TryInto;
 
 pub trait SimdSum<T = Self>: Sized {
-    fn simd_sum<const LANES: usize>(values: &[Self]) -> Self;
+    fn simd_sum<const LANES: usize>(values: &[T]) -> T;
 }
 
 macro_rules! simd_sum_impl {
     ($t: ty, $zero: expr) => {
         impl SimdSum for $t {
-            fn simd_sum<const LANES: usize>(values: &[Self]) -> Self {
+            #[multiversion(targets = "simd")]
+            fn simd_sum<const LANES: usize>(values: &[$t]) -> $t {
                 let chunks = values.chunks_exact(LANES);
                 let remainder = chunks.remainder();
 
                 let sum = chunks.fold([$zero; LANES], |mut acc, chunk| {
-                    let chunk: [Self; LANES] = chunk.try_into().unwrap();
+                    let chunk: [$t; LANES] = chunk.try_into().unwrap();
                     for i in 0..LANES {
                         acc[i] += chunk[i];
                     }
                     acc
                 });
 
-                let remainder: Self = remainder.iter().copied().sum();
+                let remainder: $t = remainder.iter().copied().sum();
 
                 let mut reduced = $zero;
                 for i in 0..LANES {

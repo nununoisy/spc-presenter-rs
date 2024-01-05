@@ -7,7 +7,7 @@ use slint_build;
 // FFmpeg vcpkg line:
 // .\vcpkg\vcpkg.exe install ffmpeg[core,ffmpeg,swresample,swscale,avdevice,x264]:x64-windows --recurse
 
-fn compile(path: &str) {
+fn compile<P: AsRef<Path>>(path: P) {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let config = slint_build::CompilerConfiguration::new()
         .with_include_paths(vec![
@@ -53,6 +53,7 @@ fn ffmpeg_sys_version_detect() {
 fn main() {
     ffmpeg_sys_version_detect();
     apply_windows_resources();
+    compile("src/gui/slint/localization.slint");
     compile("src/gui/slint/piano-keys.slint");
     compile("src/gui/slint/color-picker.slint");
     compile("src/gui/slint/sample-config.slint");

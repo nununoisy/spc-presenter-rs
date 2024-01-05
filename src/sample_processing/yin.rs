@@ -107,12 +107,12 @@ impl Yin {
                     continue;
                 }
 
-                let cum_mean = match tau {
+                let cum_mean_inv = match tau {
                     0 => 1.0,
-                    _ => (cum_sum / tau as f64) + f64::EPSILON
+                    _ => tau as f64 / cum_sum
                 };
 
-                yin_frame[tau - min_period] = difference / cum_mean;
+                yin_frame[tau - min_period] = difference * cum_mean_inv;
             }
 
             result.push(yin_frame);

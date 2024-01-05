@@ -33,18 +33,6 @@ export struct ProgressInfo {
 }
 
 export global ProgressUtils {
-    pure function format-duration-component(c: int) -> string {
-        if (c < 10) {
-            Localization.tr-args("formatted-duration-component-lt10", [
-                Localization.int-arg("n", c)
-            ])
-        } else {
-            Localization.tr-args("formatted-duration-component-ge10", [
-                Localization.int-arg("n", c)
-            ])
-        }
-    }
-
     pure public function format-duration(d: duration) -> string {
         if (d == -1ms) {
             Localization.tr("formatted-duration-error")
@@ -52,9 +40,9 @@ export global ProgressUtils {
             Localization.tr("formatted-duration-unknown")
         } else {
             Localization.tr-args("formatted-duration", [
-                Localization.arg("hours", format-duration-component(Math.floor(d / 3600s))),
-                Localization.arg("minutes", format-duration-component(Math.floor(Math.mod(d / 60s, 60)))),
-                Localization.arg("seconds", format-duration-component(Math.floor(Math.mod(d / 1s, 60))))
+                Localization.arg("hours", Math.floor(d / 3600s)),
+                Localization.arg("minutes", Math.floor(Math.mod(d / 60s, 60))),
+                Localization.arg("seconds", Math.floor(Math.mod(d / 1s, 60)))
             ])
         }
     }
@@ -82,15 +70,15 @@ export global ProgressUtils {
     pure public function humanize-size(b: int) -> string {
         if (b >= 1073741824) {
             Localization.tr-args("file-size-gibibytes", [
-                Localization.int-arg("n", Math.round(b / 10737418.24) / 100)
+                Localization.arg("n", Math.round(b / 10737418.24) / 100)
             ])
         } else if (b >= 1048576) {
             Localization.tr-args("file-size-mebibytes", [
-                Localization.int-arg("n", Math.round(b / 10485.76) / 100)
+                Localization.arg("n", Math.round(b / 10485.76) / 100)
             ])
         } else if (b >= 1024) {
             Localization.tr-args("file-size-kibibytes", [
-                Localization.int-arg("n", Math.round(b / 10.24) / 100)
+                Localization.arg("n", Math.round(b / 10.24) / 100)
             ])
         } else {
             Localization.tr-args("file-size-bytes", [
@@ -136,7 +124,7 @@ export component Progress {
             Localization.tr("progress-status-render-starting")
         } else if (root.progress-info.progress-type == ProgressType.Rendering) {
             Localization.tr-args("progress-status-rendering", [
-                Localization.arg("progress", Math.round(root.progress-info.progress * 100)),
+                Localization.arg("progress", root.progress-info.progress),
                 Localization.int-arg("fps", root.progress-info.fps),
                 Localization.arg("encodedDuration", ProgressUtils.format-duration(root.progress-info.encoded-duration)),
                 Localization.arg("expectedDuration", ProgressUtils.format-duration(root.progress-info.expected-duration)),
@@ -155,12 +143,12 @@ export component Progress {
             Localization.tr("progress-status-processor-starting")
         } else if (root.progress-info.progress-type == ProgressType.Processing && root.progress-info.current-sample == 0) {
             Localization.tr-args("progress-status-processing-detecting-samples", [
-                Localization.arg("progress", Math.round(root.progress-info.progress * 100)),
+                Localization.arg("progress", root.progress-info.progress),
                 Localization.int-arg("detectedSamples", root.progress-info.total-samples)
             ])
         } else if (root.progress-info.progress-type == ProgressType.Processing && root.progress-info.current-sample != 0) {
             Localization.tr-args("progress-status-processing-processing-samples", [
-                Localization.arg("progress", Math.round(root.progress-info.progress * 100)),
+                Localization.arg("progress", root.progress-info.progress),
                 Localization.arg("sourceIndex", SampleUtils.format-hex(root.progress-info.source)),
                 Localization.int-arg("currentSample", root.progress-info.current-sample),
                 Localization.int-arg("totalSamples", root.progress-info.total-samples)

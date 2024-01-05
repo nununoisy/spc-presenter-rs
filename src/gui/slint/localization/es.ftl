@@ -66,24 +66,32 @@ progress-title-processing-processing-samples = Procesando samples
 
 progress-status-render-error = Error mientras renderizaba: {$error}
 progress-status-render-starting = Preparando su música
-progress-status-rendering = {$progress}%, {$fps} FPS, codificó {$encodedDuration}/{$expectedDuration} ({$videoSize}), {$eta}
+progress-status-rendering = { NUMBER($progress, style: "percent") }, {$fps} FPS, codificó {$encodedDuration}/{$expectedDuration} ({$videoSize}), {$eta}
 progress-status-render-finished = Render finalizado
 progress-status-render-cancelled = Render cancelado
 progress-status-processor-error = Error mientras procesaba: {$error}
 progress-status-processor-starting = Preparando para detectar samples
-progress-status-processing-detecting-samples = {$progress}%, detectó {$detectedSamples ->
+progress-status-processing-detecting-samples = { NUMBER($progress, style: "percent") }, detectó {$detectedSamples ->
     [one] {$detectedSamples} sample
     *[other] {$detectedSamples} samples
 }
-progress-status-processing-processing-samples = {$progress}%, procesando sample {$sourceIndex} ({$currentSample}/{$totalSamples})
+progress-status-processing-processing-samples = { NUMBER($progress, style: "percent") }, procesando sample {$sourceIndex} ({$currentSample}/{$totalSamples})
 progress-status-processor-finished = Procesando finalizado
 progress-status-processor-cancelled = Procesando cancelado
 
+error-message-spc-file-invalid = Archivo SPC inválido: {$error}
+error-message-config-read-error = Error al leer el archivo de configuración: {$error}
+error-message-config-parse-error = Archivo configuración inválido: {$error}
+error-message-config-write-error = Error al transcribir el archivo de configuración: {$error}
+error-message-config-serialize-error = Error al serializar la configuración: {$error}
+error-message-tuning-read-error = Error al leer los datos de afinación: {$error}
+error-message-tuning-parse-error = Datos de afinación inválidos: {$error}
+error-message-tuning-unrecognized-format = Datos de afinación tienen un formato desconocido.
+error-message-tuning-sample-write-error = Error al copiar el sample: {$error}
+
 formatted-duration-error = <error>
 formatted-duration-unknown = <desconocido>
-formatted-duration-component-lt10 = 0{$n}
-formatted-duration-component-ge10 = {$n}
-formatted-duration = {$hours}:{$minutes}:{$seconds}
+formatted-duration = { NUMBER($hours, minimumIntegerDigits: 2) }:{ NUMBER($minutes, minimumIntegerDigits: 2) }:{ NUMBER($seconds, minimumIntegerDigits: 2) }
 
 remaining-duration-unknown = queda tiempo desconocido
 remaining-duration-hours = { $n ->
@@ -100,7 +108,7 @@ remaining-duration-seconds = { $n ->
 }
 remaining-duration-less-than-a-second = queda menos de un segundo
 
-file-size-gibibytes = {$n} GiB
-file-size-mebibytes = {$n} MiB
-file-size-kibibytes = {$n} KiB
+file-size-gibibytes = { NUMBER($n, maximumFractionDigits: 2) } GiB
+file-size-mebibytes = { NUMBER($n, maximumFractionDigits: 2) } MiB
+file-size-kibibytes = { NUMBER($n, maximumFractionDigits: 2) } KiB
 file-size-bytes = {$n} B

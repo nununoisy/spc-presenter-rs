@@ -9,7 +9,7 @@ version-dialog-button-close = Close
 spc-file-browser-label = Input SPC:
 spc-metadata-placeholder = <no metadata>
 
-config-label-base-channel-colors = Base channel colors:
+config-label-base-channel-colors = Base channel colours:
 config-button-import-tooltip = Import
 config-button-export-tooltip = Export
 config-button-reset-tooltip = Reset
@@ -31,7 +31,7 @@ tuning-sample-config-pitch-type-label = Pitch:
 tuning-sample-config-unit-suffix-hertz = Hz
 tuning-sample-config-addmusick-tuning-placeholder = Tuning
 tuning-sample-config-addmusick-subtuning-placeholder = Sub.
-tuning-sample-config-per-sample-color-label = Per-sample color:
+tuning-sample-config-per-sample-color-label = Per-sample colour:
 
 background-file-browser-label = Background:
 
@@ -60,30 +60,38 @@ progress-title-idle = Idle
 progress-title-starting = Setting up
 progress-title-rendering = Rendering
 progress-title-rendering-to-loop-point = Rendering to loop point
-progress-title-rendering-initializing = Initializing
+progress-title-rendering-initializing = Initialising
 progress-title-processing-detecting-samples = Detecting samples
 progress-title-processing-processing-samples = Processing samples
 
 progress-status-render-error = Render error: {$error}
 progress-status-render-starting = Preparing your music
-progress-status-rendering = {$progress}%, {$fps} FPS, encoded {$encodedDuration}/{$expectedDuration} ({$videoSize}), {$eta}
+progress-status-rendering = { NUMBER($progress, style: "percent") }, {$fps} FPS, encoded {$encodedDuration}/{$expectedDuration} ({$videoSize}), {$eta}
 progress-status-render-finished = Render finished
 progress-status-render-cancelled = Render cancelled
 progress-status-processor-error = Processing error: {$error}
 progress-status-processor-starting = Preparing to detect samples
-progress-status-processing-detecting-samples = {$progress}%, found {$detectedSamples ->
+progress-status-processing-detecting-samples = { NUMBER($progress, style: "percent") }, found {$detectedSamples ->
     [one] {$detectedSamples} sample
     *[other] {$detectedSamples} samples
 }
-progress-status-processing-processing-samples = {$progress}%, processing sample {$sourceIndex} ({$currentSample}/{$totalSamples})
+progress-status-processing-processing-samples = { NUMBER($progress, style: "percent") }, processing sample {$sourceIndex} ({$currentSample}/{$totalSamples})
 progress-status-processor-finished = Processing finished
 progress-status-processor-cancelled = Processing cancelled
 
+error-message-spc-file-invalid = Invalid SPC file: {$error}
+error-message-config-read-error = Failed to read configuration file: {$error}
+error-message-config-parse-error = Invalid configuration file: {$error}
+error-message-config-write-error = Failed to write configuration file: {$error}
+error-message-config-serialize-error = Failed to serialise configuration: {$error}
+error-message-tuning-read-error = Failed to read tuning data: {$error}
+error-message-tuning-parse-error = Invalid tuning data: {$error}
+error-message-tuning-unrecognized-format = Unrecognised tuning data format.
+error-message-tuning-sample-write-error = Failed to dump sample: {$error}
+
 formatted-duration-error = <error>
 formatted-duration-unknown = <unknown>
-formatted-duration-component-lt10 = 0{$n}
-formatted-duration-component-ge10 = {$n}
-formatted-duration = {$hours}:{$minutes}:{$seconds}
+formatted-duration = { NUMBER($hours, minimumIntegerDigits: 2) }:{ NUMBER($minutes, minimumIntegerDigits: 2) }:{ NUMBER($seconds, minimumIntegerDigits: 2) }
 
 remaining-duration-unknown = unknown time remaining
 remaining-duration-hours = { $n ->
@@ -100,7 +108,7 @@ remaining-duration-seconds = { $n ->
 }
 remaining-duration-less-than-a-second = less than a second remaining
 
-file-size-gibibytes = {$n} GiB
-file-size-mebibytes = {$n} MiB
-file-size-kibibytes = {$n} KiB
+file-size-gibibytes = { NUMBER($n, maximumFractionDigits: 2) } GiB
+file-size-mebibytes = { NUMBER($n, maximumFractionDigits: 2) } MiB
+file-size-kibibytes = { NUMBER($n, maximumFractionDigits: 2) } KiB
 file-size-bytes = {$n} B
