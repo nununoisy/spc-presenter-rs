@@ -3,7 +3,7 @@ use super::dsp::Dsp;
 use super::super::apu::Apu;
 use super::envelope::Envelope;
 use super::dsp_helpers;
-use super::gaussian::{HALF_KERNEL_SIZE, HALF_KERNEL, ACCURATE_GAUSSIAN_TABLE};
+use super::gaussian::{HALF_KERNEL, HALF_KERNEL_SIZE, ACCURATE_KERNEL, ACCURATE_KERNEL_SIZE};
 
 const RESAMPLE_BUFFER_LEN: usize = 12;
 
@@ -85,6 +85,7 @@ pub struct Voice {
     endx_bit: bool,
     endx_latch: bool,
     pub outx_value: u8,
+    pub envx_value: u8,
     kon_delay: u8,
 
     pub resampling_mode: ResamplingMode,
@@ -131,6 +132,7 @@ impl Voice {
             endx_bit: false,
             endx_latch: false,
             outx_value: 0,
+            envx_value: 0,
             kon_delay: 0,
 
             resampling_mode,
@@ -163,56 +165,83 @@ impl Voice {
     }
 
     pub fn render_sample(&mut self, last_voice_out: i32, noise: i32, are_any_voices_solod: bool) -> VoiceOutput {
+        // last misc29
         self.every_other_sample = !self.every_other_sample;
 
+        // voice1
+        self.read_entry();
+
+        // voice2
+        let next_sample_address = if self.kon_delay != 0 {
+            self.sample_start_address
+        } else {
+            self.loop_start_address
+        };
+
+        // voice3a
         let mut pitch = ((self.pitch_high as i32) << 8) | (self.pitch_low as i32);
+
+        // voice3b
+
+        // voice3c
         if self.pitch_mod {
             pitch += ((last_voice_out >> 5) * pitch) >> 10;
         }
         pitch = ((pitch as u32) & 0x7fff) as i32;
 
         if self.kon_delay > 0 {
+            if self.kon_delay == 5 {
+                self.sample_address = next_sample_address;
+                self.resample_buffer_pos = 0;
+                self.sample_block_index = 0;
+                self.sample_frame = 0;
+                self.edge_hit = true;
+                self.read_brr_header();
+            }
+
             self.envelope.kon_delay_tick();
 
-            self.sample_pos = 0;
             self.kon_delay -= 1;
+            self.sample_pos = if (self.kon_delay & 3) != 0 { 0x4000 } else { 0 };
+
+            pitch = 0;
         };
 
         let mut sample = if !self.noise_on {
-            let base_pos = match self.resampling_mode {
-                ResamplingMode::Accurate => self.resample_buffer_pos + (self.sample_pos >> 12) as usize,
-                _ => self.resample_buffer_pos
-            };
+            let base_pos = self.resample_buffer_pos + (self.sample_pos >> 12) as usize;
 
             let s1 = self.resample_buffer[base_pos % RESAMPLE_BUFFER_LEN];
             let s2 = self.resample_buffer[(base_pos + 1) % RESAMPLE_BUFFER_LEN];
             let s3 = self.resample_buffer[(base_pos + 2) % RESAMPLE_BUFFER_LEN];
             let s4 = self.resample_buffer[(base_pos + 3) % RESAMPLE_BUFFER_LEN];
+
             let resampled = match self.resampling_mode {
                 ResamplingMode::Linear => {
-                    let p1 = self.sample_pos;
+                    let p1 = self.sample_pos & 0xFFF;
                     let p2 = 0x1000 - p1;
+
                     (s1 * p1 + s2 * p2) >> 12
                 },
                 ResamplingMode::Gaussian => {
-                    let kernel_index = (self.sample_pos >> 2) as usize;
-                    let p1 = HALF_KERNEL[kernel_index] as i32;
-                    let p2 = HALF_KERNEL[kernel_index + HALF_KERNEL_SIZE / 2] as i32;
-                    let p3 = HALF_KERNEL[HALF_KERNEL_SIZE - 1 - kernel_index] as i32;
-                    let p4 = HALF_KERNEL[HALF_KERNEL_SIZE - 1 - (kernel_index + HALF_KERNEL_SIZE / 2)] as i32;
+                    let kernel_index = ((self.sample_pos & 0xFFF) >> 2) as usize;
+                    let p1 = HALF_KERNEL[HALF_KERNEL_SIZE - 1 - (kernel_index + HALF_KERNEL_SIZE / 2)] as i32;
+                    let p2 = HALF_KERNEL[HALF_KERNEL_SIZE - 1 - kernel_index] as i32;
+                    let p3 = HALF_KERNEL[kernel_index + HALF_KERNEL_SIZE / 2] as i32;
+                    let p4 = HALF_KERNEL[kernel_index] as i32;
+
                     (s1 * p1 + s2 * p2 + s3 * p3 + s4 * p4) >> 11
                 },
                 ResamplingMode::Accurate => {
-                    let kernel_index = ((self.sample_pos >> 4) as usize) & 0xFF;
-                    let p1 = ACCURATE_GAUSSIAN_TABLE[255 - kernel_index] as i32;
-                    let p2 = ACCURATE_GAUSSIAN_TABLE[511 - kernel_index] as i32;
-                    let p3 = ACCURATE_GAUSSIAN_TABLE[kernel_index + 256] as i32;
-                    let p4 = ACCURATE_GAUSSIAN_TABLE[kernel_index] as i32;
+                    let kernel_index = ((self.sample_pos & 0xFFF) >> 4) as usize;
+                    let p1 = ACCURATE_KERNEL[ACCURATE_KERNEL_SIZE - 1 - (kernel_index + ACCURATE_KERNEL_SIZE / 2)] as i32;
+                    let p2 = ACCURATE_KERNEL[ACCURATE_KERNEL_SIZE - 1 - kernel_index] as i32;
+                    let p3 = ACCURATE_KERNEL[kernel_index + ACCURATE_KERNEL_SIZE / 2] as i32;
+                    let p4 = ACCURATE_KERNEL[kernel_index] as i32;
 
-                    let c1 = (s4 * p1) >> 11;
-                    let c2 = (s3 * p2) >> 11;
-                    let c3 = (s2 * p3) >> 11;
-                    let c4 = (s1 * p4) >> 11;
+                    let c1 = (s1 * p1) >> 11;
+                    let c2 = (s2 * p2) >> 11;
+                    let c3 = (s3 * p3) >> 11;
+                    let c4 = (s4 * p4) >> 11;
 
                     ((((c1 + c2 + c3) & 0xFFFF) as i16) as i32) + c4
                 }
@@ -222,10 +251,8 @@ impl Voice {
             ((noise << 1) as i16) as i32
         };
 
-        let env_level = self.envelope.level;
-
-        sample = ((sample * env_level) >> 11) & !1;
-        self.outx_value = ((sample >> 8) as i8) as u8;
+        sample = ((sample * self.envelope.level) >> 11) & !1;
+        let envx_value = (self.envelope.level >> 4) as u8;
 
         if self.brr_decoder.is_end && !self.brr_decoder.is_looping {
             self.envelope.key_off();
@@ -234,11 +261,12 @@ impl Voice {
 
         if self.every_other_sample {
             if self.kof_queued {
-                self.key_off();
+                self.envelope.key_off();
             }
             if self.kon_queued {
                 self.kon_queued = false;
-                self.key_on();
+                self.envelope.key_on();
+                self.kon_delay = 5;
             }
         }
 
@@ -246,38 +274,33 @@ impl Voice {
             self.envelope.tick();
         }
 
+        // voice4
+        let mut looped = false;
+        if self.sample_pos >= 0x4000 {
+            self.decode_brr_samples();
+
+            if self.brr_decoder.is_finished() {
+                if self.brr_decoder.is_end {
+                    self.sample_address = next_sample_address;
+                    self.edge_hit = true;
+                    looped = true;
+                } else {
+                    self.sample_address += 9;
+                }
+                self.read_brr_header();
+                self.sample_block_index += 1;
+            }
+        }
+
         self.sample_pos = (self.sample_pos & 0x3fff) + pitch;
         if self.sample_pos > 0x7fff {
             self.sample_pos = 0x7fff;
         }
 
-        self.endx_latch = false;
-        while self.sample_pos >= 0x1000 {
-            self.sample_pos -= 0x1000;
-            self.read_next_sample();
-
-            if self.brr_decoder.is_finished() && self.samples_buffered == 0 {
-                if self.kon_delay <= 30 {
-                    if self.brr_decoder.is_end && self.brr_decoder.is_looping {
-                        self.edge_hit = true;
-                        self.read_entry();
-                        if self.kon_delay == 0 {
-                            self.sample_address = self.loop_start_address;
-                        } else {
-                            self.sample_address = self.sample_start_address;
-                        }
-                    } else {
-                        self.sample_address += 9;
-                    }
-                    self.read_next_block();
-                    self.sample_block_index += 1;
-                } else {
-                    self.brr_decoder.restart();
-                    self.sample_offset = 0;
-                }
-            }
+        // voice5
+        if looped {
+            self.endx_latch = true;
         }
-
         let ret =
             if self.is_solod || (!self.is_muted && !are_any_voices_solod) {
                 VoiceOutput {
@@ -294,10 +317,17 @@ impl Voice {
             };
         self.output_buffer.write(ret);
 
-        if self.kon_delay >= 5 {
-            self.endx_latch = false;
-        }
+        // voice6
+        let outx_value = ((sample >> 8) as i8) as u8;
+
+        // voice7
         self.endx_bit = self.endx_latch;
+
+        // voice8
+        self.outx_value = outx_value;
+
+        // voice9
+        self.envx_value = envx_value;
 
         ret
     }
@@ -306,80 +336,30 @@ impl Voice {
         self.pitch_high = value & 0x3f;
     }
 
-    fn setup_brr_decoder(&mut self) {
-        self.read_entry();
-        self.sample_address = self.sample_start_address;
-
-        let prev2 = self.resample_buffer[(RESAMPLE_BUFFER_LEN + self.resample_buffer_pos - 2) % RESAMPLE_BUFFER_LEN] as i16;
-        let prev1 = self.resample_buffer[(RESAMPLE_BUFFER_LEN + self.resample_buffer_pos - 1) % RESAMPLE_BUFFER_LEN] as i16;
-        self.brr_decoder.reset(prev1, prev2);
-
-        self.read_next_block();
-        self.sample_block_index = 0;
-        self.sample_pos = 0;
-    }
-
-    fn key_on(&mut self) {
-        // Do initial decode to fill the resample buffer during what would be key-on delay
-        self.setup_brr_decoder();
-        for _ in 0..RESAMPLE_BUFFER_LEN {
-            self.read_next_sample();
-        }
-
-        // Then actually setup the BRR decoder
-        self.setup_brr_decoder();
-
-        self.envelope.key_on();
-        self.edge_hit = true;
-        self.sample_frame = 0;
-        self.endx_bit = false;
-        self.endx_latch = false;
-        self.kon_delay = 5;
-    }
-
-    fn key_off(&mut self) {
-        self.envelope.key_off();
-    }
-
     fn read_entry(&mut self) {
         self.sample_start_address = self.dsp().read_source_dir_start_address(self.source as i32);
         self.loop_start_address = self.dsp().read_source_dir_loop_address(self.source as i32);
     }
 
-    fn read_next_block(&mut self) {
-        // println!("Read BRR block header: ${:04x}", self.sample_address);
+    fn read_brr_header(&mut self) {
         self.brr_decoder.read_header(self.emulator().read_u8(self.sample_address));
         self.sample_offset = 0;
-
-        if self.brr_decoder.is_end || self.brr_decoder.is_looping {
-            self.endx_latch = true;
-        }
     }
 
-    fn read_next_sample(&mut self) {
-        if self.samples_buffered == 0 {
-            debug_assert!(self.sample_offset < 7, "OOB sample access: offset={}", self.sample_offset);
-            let buf = vec![
-                self.emulator().read_u8(self.sample_address + self.sample_offset + 1),
-                self.emulator().read_u8(self.sample_address + self.sample_offset + 2)
-            ];
-            self.sample_offset += 2;
+    fn decode_brr_samples(&mut self) {
+        debug_assert!(self.sample_offset < 7, "OOB sample access: offset={}", self.sample_offset);
+        let buf = vec![
+            self.emulator().read_u8(self.sample_address + self.sample_offset + 1),
+            self.emulator().read_u8(self.sample_address + self.sample_offset + 2)
+        ];
+        self.sample_offset += 2;
 
-            self.brr_decoder.read(&buf);
+        self.brr_decoder.read(&buf);
 
-            self.resample_buffer[(self.resample_buffer_pos + RESAMPLE_BUFFER_LEN - 1) % RESAMPLE_BUFFER_LEN] = self.brr_decoder.read_next_sample() as i32;
-            self.resample_buffer[(self.resample_buffer_pos + RESAMPLE_BUFFER_LEN - 2) % RESAMPLE_BUFFER_LEN] = self.brr_decoder.read_next_sample() as i32;
-            self.resample_buffer[(self.resample_buffer_pos + RESAMPLE_BUFFER_LEN - 3) % RESAMPLE_BUFFER_LEN] = self.brr_decoder.read_next_sample() as i32;
-            self.resample_buffer[(self.resample_buffer_pos + RESAMPLE_BUFFER_LEN - 4) % RESAMPLE_BUFFER_LEN] = self.brr_decoder.read_next_sample() as i32;
-
-            self.samples_buffered = 4;
+        for _ in 0..4 {
+            self.resample_buffer[self.resample_buffer_pos] = self.brr_decoder.read_next_sample() as i32;
+            self.resample_buffer_pos = (self.resample_buffer_pos + 1) % RESAMPLE_BUFFER_LEN;
         }
-
-        self.resample_buffer_pos = match self.resample_buffer_pos {
-            0 => RESAMPLE_BUFFER_LEN - 1,
-            x => x - 1
-        };
-        self.samples_buffered -= 1;
     }
 
     pub fn pitch(&self) -> u16 {

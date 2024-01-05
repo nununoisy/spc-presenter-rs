@@ -60,7 +60,7 @@ pub struct Dsp {
 
 impl Dsp {
     pub fn new(emulator: *mut Apu) -> Box<Dsp> {
-        let resampling_mode = ResamplingMode::Gaussian;
+        let resampling_mode = ResamplingMode::Accurate;
         let mut ret = Box::new(Dsp {
             emulator,
 
@@ -107,7 +107,7 @@ impl Dsp {
         ret.set_filter_coefficient(0x05, 0xff);
         ret.set_filter_coefficient(0x06, 0x0f);
         ret.set_filter_coefficient(0x07, 0xff);
-        ret.set_resampling_mode(ResamplingMode::Gaussian);
+        ret.set_resampling_mode(ResamplingMode::Accurate);
         ret
     }
 
@@ -339,7 +339,7 @@ impl Dsp {
                 0x05 => voice.envelope.adsr0,
                 0x06 => voice.envelope.adsr1,
                 0x07 => voice.envelope.gain,
-                0x08 => (voice.envelope.level >> 4) as u8,
+                0x08 => voice.envx_value,
                 0x09 => voice.outx_value,
                 _ => unreachable!()
             }

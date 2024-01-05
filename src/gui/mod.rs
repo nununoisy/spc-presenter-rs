@@ -16,6 +16,7 @@ use tiny_skia::Color;
 use render_thread::{RenderThreadMessage, RenderThreadRequest};
 use sample_processing_thread::{SampleProcessingThreadMessage, SampleProcessingThreadRequest};
 use audio_previewer::{AudioPreviewer, audio_stopped_timer};
+use localization::fluent_args;
 use fluent::FluentArgs;
 use crate::config::Config;
 use crate::emulator::ResamplingMode;
@@ -158,7 +159,7 @@ fn browse_for_dump_dialog() -> Option<String> {
 fn display_error_dialog(text: &str) {
     MessageDialog::new()
         .set_title("SPCPresenter")
-        .set_text(text)
+        .set_text(text.replace('\u{2068}', "").replace('\u{2069}', "").as_str())
         .set_type(MessageType::Error)
         .show_alert()
         .unwrap();
@@ -279,40 +280,25 @@ pub fn run() {
         let localization_adapter = localization_adapter.clone();
         main_window.global::<Localization>().on_tr(move |message_id| {
             let localization_adapter = localization_adapter.lock().unwrap();
-            let bundle = localization_adapter.bundle();
-
-            if let Some(message) = bundle.get_message(message_id.as_str()) {
-                if let Some(pattern) = message.value() {
-                    let mut errors = Vec::new();
-                    return bundle.format_pattern(&pattern, None, &mut errors).to_string().into();
-                }
-            }
-            message_id.clone()
+            localization_adapter.get(message_id.as_str(), None).into()
         });
     }
 
     {
         let localization_adapter = localization_adapter.clone();
-        main_window.global::<Localization>().on_tr_args(move |message_id, args| {
+        main_window.global::<Localization>().on_tr_args(move |message_id, slint_args| {
             let localization_adapter = localization_adapter.lock().unwrap();
-            let bundle = localization_adapter.bundle();
 
-            let mut fluent_args = FluentArgs::new();
-            for arg in args.as_any().downcast_ref::<slint::VecModel<LocalizationArg>>().unwrap().iter() {
-                if arg.is_int {
-                    fluent_args.set(arg.id.to_string(), arg.i_value);
+            let mut args = FluentArgs::new();
+            for slint_arg in slint_args.as_any().downcast_ref::<slint::VecModel<LocalizationArg>>().unwrap().iter() {
+                if slint_arg.is_int {
+                    args.set(slint_arg.id.to_string(), slint_arg.i_value);
                 } else {
-                    fluent_args.set(arg.id.to_string(), arg.s_value.to_string());
+                    args.set(slint_arg.id.to_string(), slint_arg.s_value.to_string());
                 }
             }
 
-            if let Some(message) = bundle.get_message(message_id.as_str()) {
-                if let Some(pattern) = message.value() {
-                    let mut errors = Vec::new();
-                    return bundle.format_pattern(&pattern, Some(&fluent_args), &mut errors).to_string().into();
-                }
-            }
-            message_id.clone()
+            localization_adapter.get(message_id.as_str(), Some(&args)).into()
         });
     }
 
@@ -386,16 +372,31 @@ pub fn run() {
     {
         let main_window_weak = main_window.as_weak();
         let options = options.clone();
+        let localization_adapter = localization_adapter.clone();
         main_window.on_import_config(move || {
             match browse_for_config_import_dialog() {
                 Some(path) => {
                     let new_config_str = match fs::read_to_string(path) {
                         Ok(d) => d,
-                        Err(e) => return display_error_dialog(&e.to_string()),
+                        Err(e) => {
+                            let message = localization_adapter
+                                .lock()
+                                .unwrap()
+                                .get("error-message-config-read-error", Some(&fluent_args!(error: e.to_string())));
+                            display_error_dialog(&message);
+                            return;
+                        }
                     };
                     options.lock().unwrap().config = match Config::from_toml(&new_config_str) {
                         Ok(c) => c,
-                        Err(e) => return display_error_dialog(&e.to_string())
+                        Err(e) => {
+                            let message = localization_adapter
+                                .lock()
+                                .unwrap()
+                                .get("error-message-config-parse-error", Some(&fluent_args!(error: e.to_string())));
+                            display_error_dialog(&message);
+                            return;
+                        }
                     };
                     main_window_weak.unwrap().invoke_update_config(false);
                 },
@@ -407,6 +408,7 @@ pub fn run() {
     {
         let main_window_weak = main_window.as_weak();
         let options = options.clone();
+        let localization_adapter = localization_adapter.clone();
         main_window.on_export_config(move || {
             match browse_for_config_export_dialog() {
                 Some(path) => {
@@ -414,12 +416,26 @@ pub fn run() {
 
                     let config_str = match options.lock().unwrap().config.export() {
                         Ok(c) => c,
-                        Err(e) => return display_error_dialog(&e.to_string())
+                        Err(e) => {
+                            let message = localization_adapter
+                                .lock()
+                                .unwrap()
+                                .get("error-message-config-serialize-error", Some(&fluent_args!(error: e.to_string())));
+                            display_error_dialog(&message);
+                            return;
+                        }
                     };
 
                     match fs::write(&path, config_str) {
                         Ok(()) => (),
-                        Err(e) => return display_error_dialog(&e.to_string())
+                        Err(e) => {
+                            let message = localization_adapter
+                                .lock()
+                                .unwrap()
+                                .get("error-message-config-write-error", Some(&fluent_args!(error: e.to_string())));
+                            display_error_dialog(&message);
+                            return;
+                        }
                     }
                 },
                 None => ()
@@ -592,13 +608,18 @@ pub fn run() {
         let main_window_weak = main_window.as_weak();
         let options = options.clone();
         let spt_tx = spt_tx.clone();
+        let localization_adapter = localization_adapter.clone();
         main_window.on_browse_for_module(move || {
             match browse_for_module_dialog() {
                 Some(path) => {
                     let metadata_lines = match get_spc_metadata(&path) {
                         Ok((_duration, metadata_lines)) => metadata_lines,
                         Err(e) => {
-                            display_error_dialog(format!("Invalid SPC file: {}", e).as_str());
+                            let message = localization_adapter
+                                .lock()
+                                .unwrap()
+                                .get("error-message-spc-file-invalid", Some(&fluent_args!(error: e.to_string())));
+                            display_error_dialog(&message);
                             return options.lock().unwrap().input_path.clone().into();
                         }
                     };
@@ -665,6 +686,7 @@ pub fn run() {
 
     {
         let main_window_weak = main_window.as_weak();
+        let localization_adapter = localization_adapter.clone();
         main_window.on_import_tunings(move || {
             let tuning_data_path = match browse_for_tuning_data() {
                 Some(path) => path,
@@ -679,7 +701,11 @@ pub fn run() {
                 let session_json = match fs::read_to_string(tuning_data_path) {
                     Ok(json) => json,
                     Err(e) => {
-                        display_error_dialog(format!("Failed to read tuning data: {}", e).as_str());
+                        let message = localization_adapter
+                            .lock()
+                            .unwrap()
+                            .get("error-message-tuning-read-error", Some(&fluent_args!(error: e.to_string())));
+                        display_error_dialog(&message);
                         return;
                     }
                 };
@@ -687,7 +713,11 @@ pub fn run() {
                 let samples = match tuning::super_midi_pak_session::SuperMidiPakSession::from_json(&session_json).and_then(|session| session.samples()) {
                     Ok(samples) => samples,
                     Err(e) => {
-                        display_error_dialog(format!("Failed to parse tuning data: {}", e).as_str());
+                        let message = localization_adapter
+                            .lock()
+                            .unwrap()
+                            .get("error-message-tuning-parse-error", Some(&fluent_args!(error: e.to_string())));
+                        display_error_dialog(&message);
                         return;
                     }
                 };
@@ -702,7 +732,11 @@ pub fn run() {
                     }
                 }
             } else {
-                display_error_dialog("Unrecognized tuning data format.");
+                let message = localization_adapter
+                    .lock()
+                    .unwrap()
+                    .get("error-message-tuning-unrecognized-data-format", None);
+                display_error_dialog(&message);
                 return;
             }
 
@@ -752,6 +786,7 @@ pub fn run() {
 
     {
         let options = options.clone();
+        let localization_adapter = localization_adapter.clone();
         main_window.on_dump_sample(move |sample_config| {
             let options = options.lock().unwrap();
             let source = sample_config.source as u8;
@@ -763,7 +798,11 @@ pub fn run() {
 
                 let brr_data = sample_data.sample().to_bytes();
                 if let Err(e) = fs::write(output_path, brr_data) {
-                    display_error_dialog(format!("Error dumping sample: {}", e).as_str());
+                    let message = localization_adapter
+                        .lock()
+                        .unwrap()
+                        .get("error-message-tuning-sample-write-error", Some(&fluent_args!(error: e.to_string())));
+                    display_error_dialog(&message);
                 }
             }
         });

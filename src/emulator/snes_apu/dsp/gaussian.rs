@@ -132,7 +132,8 @@ pub const HALF_KERNEL: [i16; HALF_KERNEL_SIZE] = [
     1567, 1567, 1567, 1567, 1567, 1567, 1567, 1567, 1567, 1567, 1567, 1567, 1567, 1567, 1567, 1567];
 
 
-pub const ACCURATE_GAUSSIAN_TABLE: [i16; 512] = [
+pub const ACCURATE_KERNEL_SIZE: usize = 512;
+pub const ACCURATE_KERNEL: [i16; ACCURATE_KERNEL_SIZE] = [
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
     1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   2,   2,   2,   2,   2,
     2,   2,   3,   3,   3,   3,   3,   4,   4,   4,   4,   4,   5,   5,   5,   5,
