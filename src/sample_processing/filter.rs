@@ -51,7 +51,7 @@ impl BiquadIIRFilter {
 
     fn recalculate_filter_coefficients(&mut self) {
         let v = (self.gain.abs() / 20.0).expf(10.0);
-        let k = (PI * self.f_c).tan();
+        let k = (PI * self.f_c / self.sample_rate).tan();
         let kk = k.powi(2);
         let (c1, c2) = if self.gain >= 0.0 {
             // boost
