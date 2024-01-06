@@ -9,7 +9,6 @@ pub struct BrrStreamDecoder {
     decode_pos: usize,
 
     sample_index: i32,
-    restarted: bool,
     last_sample: i16,
     last_last_sample: i16
 }
@@ -25,21 +24,9 @@ impl BrrStreamDecoder {
             decode_pos: 0,
 
             sample_index: 0,
-            restarted: true,
             last_sample: 0,
             last_last_sample: 0
         }
-    }
-
-    pub fn reset(&mut self, last_sample: i16, last_last_sample: i16) {
-        self.last_sample = last_sample;
-        self.last_last_sample = last_last_sample;
-        self.restarted = false;
-    }
-
-    pub fn restart(&mut self) {
-        self.sample_index = 0;
-        self.restarted = true;
     }
 
     pub fn read_header(&mut self, raw_header: u8) {
@@ -50,7 +37,6 @@ impl BrrStreamDecoder {
 
         self.sample_index = 0;
         self.decode_pos = 0;
-        self.restarted = false;
     }
 
     pub fn read(&mut self, buf: &[u8]) {
@@ -108,10 +94,6 @@ impl BrrStreamDecoder {
         let ret = self.samples[self.sample_index as usize];
         self.sample_index += 1;
         ret
-    }
-
-    pub fn needs_more_samples(&self) -> bool {
-        !self.restarted && self.sample_index as usize == self.decode_pos
     }
 
     pub fn is_finished(&self) -> bool {

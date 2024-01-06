@@ -24,15 +24,6 @@ impl BrrBlockDecoder {
         }
     }
 
-    pub fn reset(&mut self, last_sample: i16, last_last_sample: i16) {
-        self.last_sample = last_sample;
-        self.last_last_sample = last_last_sample;
-    }
-
-    pub fn restart(&mut self) {
-        self.sample_index = 0;
-    }
-
     pub fn read(&mut self, buf: &[u8]) {
         let mut buf_pos = 0;
 

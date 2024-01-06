@@ -1,4 +1,3 @@
-use crate::emulator::snes_apu::dsp::dsp_helpers;
 use super::dsp::Dsp;
 
 enum Mode {

@@ -18,19 +18,6 @@ macro_rules! fluent_fn_arg {
     }};
 }
 
-macro_rules! optional_fluent_fn_arg {
-    ($args: ident [ $key: expr ]) => {{
-        $args.get($key).cloned()
-    }};
-    ($args: ident [ $key: expr ] -> $t: tt) => {{
-        match $args.get($key).cloned() {
-            Some(FluentValue::$t(v)) => Some(v),
-            Some(_) => return FluentValue::Error,
-            None => None
-        }
-    }};
-}
-
 fn fluent_formatter<M: MemoizerKind>(value: &FluentValue<'_>, _memoizer: &M) -> Option<String> {
     match value {
         FluentValue::Number(num) => {

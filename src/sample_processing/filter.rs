@@ -1,6 +1,7 @@
 use std::f64::consts::PI;
 use rustfft::num_complex::ComplexFloat;
 
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum FilterType {
     LowPass,

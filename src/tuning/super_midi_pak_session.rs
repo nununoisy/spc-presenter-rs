@@ -71,8 +71,11 @@ pub struct SuperMidiPakSession {
     sample_catalog: Vec<SampleCatalogEntry>,
     sample_directory: Vec<SampleDirectoryEntry>,
 
+    #[allow(dead_code)]
     global_settings: HashMap<String, i32>,
+    #[allow(dead_code)]
     channel_settings: Vec<HashMap<String, i32>>,
+    #[allow(dead_code)]
     custom_tunings: CustomTunings
 }
 
