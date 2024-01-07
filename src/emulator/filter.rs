@@ -23,11 +23,16 @@ pub struct BlarggSpcFilter {
 
 impl BlarggSpcFilter {
     pub fn new(gain: i32, bass: i32) -> Self {
-        Self {
-            gain,
-            bass,
+        let mut result = Self {
+            gain: 0,
+            bass: 0,
             ch: [FilterChannel::default(), FilterChannel::default()]
-        }
+        };
+
+        result.set_gain(gain);
+        result.set_bass(bass);
+
+        result
     }
 
     pub fn clear(&mut self) {
@@ -39,6 +44,8 @@ impl BlarggSpcFilter {
     }
 
     pub fn set_bass(&mut self, bass: i32) {
+        debug_assert!(bass >= BASS_NONE);
+        debug_assert!(bass <= BASS_MAX);
         self.bass = bass;
     }
 
@@ -64,13 +71,7 @@ impl BlarggSpcFilter {
                 sum += (delta * self.gain) - (sum >> self.bass);
 
                 // Clamp to 16 bits
-                if s > 0x7FFF {
-                    *sm_ref = 0x7FFF;
-                } else if s < -0x8000 {
-                    *sm_ref = -0x8000;
-                } else {
-                    *sm_ref = s as i16;
-                }
+                *sm_ref = s.clamp(i16::MIN as i32, i16::MAX as i32) as i16
             }
 
             c.sum = sum;

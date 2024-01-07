@@ -98,8 +98,7 @@ pub struct Voice {
 
     every_other_sample: bool,
     pub kon_queued: bool,
-    pub kof_queued: bool,
-    samples_buffered: usize
+    pub kof_queued: bool
 }
 
 impl Voice {
@@ -145,8 +144,7 @@ impl Voice {
 
             every_other_sample: false,
             kon_queued: false,
-            kof_queued: false,
-            samples_buffered: 0
+            kof_queued: false
         }
     }
 

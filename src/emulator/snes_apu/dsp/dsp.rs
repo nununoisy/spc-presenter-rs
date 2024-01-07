@@ -138,10 +138,6 @@ impl Dsp {
         }
     }
 
-    fn calculate_echo_start_address(value: u8) -> u16 {
-        (value as u16) << 8
-    }
-
     pub fn set_state(&mut self, spc: &Spc) {
         for i in 0..REG_LEN {
             match i {
