@@ -1,7 +1,7 @@
 mod dsp_helpers;
 mod envelope;
 pub(crate) mod brr_block_decoder;
-mod gaussian;
+mod interpolation_tables;
 pub mod voice;
 mod filter;
 mod ring_buffer;

@@ -104,6 +104,10 @@ resampling-type-accurate = Hardware-accurate Gaussian
 resampling-type-gaussian = High-fidelity Gaussian
 # Sample interpolation type: Linear (worse than the SNES, but reminiscent of some old emulators).
 resampling-type-linear = Linear
+# Sample interpolation type: Cubic Hermite spline (better than high-fidelity Gaussian).
+resampling-type-cubic = Cubic spline
+# Sample interpolation type: Sinc, a.k.a. Whittaker-Shannon interpolation (better than cubic).
+resampling-type-sinc = Sinc
 
 # Label for the checkbox that enables Blargg's SNES_DSP audio filter.
 blargg-dsp-filter-checkbox-label = Use Blargg's DSP filter

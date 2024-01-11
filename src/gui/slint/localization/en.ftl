@@ -50,6 +50,8 @@ resampling-type-label = Sample interpolation:
 resampling-type-accurate = Hardware-accurate Gaussian
 resampling-type-gaussian = High-fidelity Gaussian
 resampling-type-linear = Linear
+resampling-type-cubic = Cubic spline
+resampling-type-sinc = Sinc
 
 blargg-dsp-filter-checkbox-label = Use Blargg's DSP filter
 

@@ -73,14 +73,20 @@ enum SerializableResamplingMode {
     #[serde(rename = "gaussian")]
     Gaussian,
     #[serde(rename = "linear")]
-    Linear
+    Linear,
+    #[serde(rename = "cubic")]
+    Cubic,
+    #[serde(rename = "sinc")]
+    Sinc
 }
 
 fn serialize_resampling_mode<S: Serializer>(resampling_mode: &ResamplingMode, serializer: S) -> Result<S::Ok, S::Error> {
     let resampling_mode = match resampling_mode {
         ResamplingMode::Accurate => SerializableResamplingMode::Accurate,
         ResamplingMode::Gaussian => SerializableResamplingMode::Gaussian,
-        ResamplingMode::Linear => SerializableResamplingMode::Linear
+        ResamplingMode::Linear => SerializableResamplingMode::Linear,
+        ResamplingMode::Cubic => SerializableResamplingMode::Cubic,
+        ResamplingMode::Sinc => SerializableResamplingMode::Sinc
     };
     resampling_mode.serialize(serializer)
 }
@@ -89,7 +95,9 @@ fn deserialize_resampling_mode<'de, D: Deserializer<'de>>(deserializer: D) -> Re
     let resampling_mode = match SerializableResamplingMode::deserialize(deserializer)? {
         SerializableResamplingMode::Accurate => ResamplingMode::Accurate,
         SerializableResamplingMode::Gaussian => ResamplingMode::Gaussian,
-        SerializableResamplingMode::Linear => ResamplingMode::Linear
+        SerializableResamplingMode::Linear => ResamplingMode::Linear,
+        SerializableResamplingMode::Cubic => ResamplingMode::Cubic,
+        SerializableResamplingMode::Sinc => ResamplingMode::Sinc
     };
     Ok(resampling_mode)
 }

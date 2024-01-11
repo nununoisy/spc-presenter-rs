@@ -14,7 +14,7 @@ export enum StopConditionType {
 }
 
 export enum ResamplingType {
-    Accurate, Gaussian, Linear
+    Accurate, Gaussian, Linear, Cubic, Sinc
 }
 
 component FileBrowser {
@@ -124,7 +124,11 @@ export component MainWindow inherits Window {
         if (root.i-resampling-type-index == 1) {
             ResamplingType.Gaussian
         } else if (root.i-resampling-type-index == 2) {
-           ResamplingType.Linear
+            ResamplingType.Linear
+        } else if (root.i-resampling-type-index == 3) {
+            ResamplingType.Cubic
+        } else if (root.i-resampling-type-index == 4) {
+            ResamplingType.Sinc
         } else {
             ResamplingType.Accurate
         }
@@ -140,6 +144,12 @@ export component MainWindow inherits Window {
         } else if (new-resampling-type == ResamplingType.Linear) {
             root.i-resampling-type-text = Localization.tr("resampling-type-linear");
             root.i-resampling-type-index = 2;
+        } else if (new-resampling-type == ResamplingType.Cubic) {
+            root.i-resampling-type-text = Localization.tr("resampling-type-cubic");
+            root.i-resampling-type-index = 3;
+        } else if (new-resampling-type == ResamplingType.Sinc) {
+            root.i-resampling-type-text = Localization.tr("resampling-type-sinc");
+            root.i-resampling-type-index = 4;
         }
     }
 
@@ -508,7 +518,9 @@ export component MainWindow inherits Window {
                 model: [
                     Localization.tr("resampling-type-accurate"),
                     Localization.tr("resampling-type-gaussian"),
-                    Localization.tr("resampling-type-linear")
+                    Localization.tr("resampling-type-linear"),
+                    Localization.tr("resampling-type-cubic"),
+                    Localization.tr("resampling-type-sinc")
                 ];
                 enabled: !root.rendering;
                 current-index <=> root.i-resampling-type-index;

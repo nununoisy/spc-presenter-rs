@@ -344,7 +344,9 @@ pub fn run() {
                 config.emulator.resampling_mode = match main_window_weak.unwrap().invoke_resampling_type() {
                     ResamplingType::Accurate => ResamplingMode::Accurate,
                     ResamplingType::Gaussian => ResamplingMode::Gaussian,
-                    ResamplingType::Linear => ResamplingMode::Linear
+                    ResamplingType::Linear => ResamplingMode::Linear,
+                    ResamplingType::Cubic => ResamplingMode::Cubic,
+                    ResamplingType::Sinc => ResamplingMode::Sinc
                 };
             } else {
                 let base_colors: Vec<Color> = (0..8)
@@ -362,7 +364,9 @@ pub fn run() {
                 main_window_weak.unwrap().invoke_set_resampling_type(match &config.emulator.resampling_mode {
                     ResamplingMode::Accurate => ResamplingType::Accurate,
                     ResamplingMode::Gaussian => ResamplingType::Gaussian,
-                    ResamplingMode::Linear => ResamplingType::Linear
+                    ResamplingMode::Linear => ResamplingType::Linear,
+                    ResamplingMode::Cubic => ResamplingType::Cubic,
+                    ResamplingMode::Sinc => ResamplingType::Sinc
                 });
             }
         });

@@ -3,7 +3,7 @@ use super::dsp::Dsp;
 use super::super::apu::Apu;
 use super::envelope::Envelope;
 use super::dsp_helpers;
-use super::gaussian::{HALF_KERNEL, HALF_KERNEL_SIZE, ACCURATE_KERNEL, ACCURATE_KERNEL_SIZE};
+use super::interpolation_tables::{GAUSSIAN_KERNEL, GAUSSIAN_KERNEL_SIZE, ACCURATE_GAUSSIAN_KERNEL, ACCURATE_GAUSSIAN_KERNEL_SIZE, SINC_KERNEL, CUBIC_SPLINE_KERNEL};
 
 const RESAMPLE_BUFFER_LEN: usize = 12;
 
@@ -11,6 +11,8 @@ const RESAMPLE_BUFFER_LEN: usize = 12;
 pub enum ResamplingMode {
     Linear,
     Gaussian,
+    Cubic,
+    Sinc,
     #[default]
     Accurate
 }
@@ -222,19 +224,47 @@ impl Voice {
                 },
                 ResamplingMode::Gaussian => {
                     let kernel_index = ((self.sample_pos & 0xFFF) >> 2) as usize;
-                    let p1 = HALF_KERNEL[HALF_KERNEL_SIZE - 1 - (kernel_index + HALF_KERNEL_SIZE / 2)] as i32;
-                    let p2 = HALF_KERNEL[HALF_KERNEL_SIZE - 1 - kernel_index] as i32;
-                    let p3 = HALF_KERNEL[kernel_index + HALF_KERNEL_SIZE / 2] as i32;
-                    let p4 = HALF_KERNEL[kernel_index] as i32;
+                    let p1 = GAUSSIAN_KERNEL[GAUSSIAN_KERNEL_SIZE - 1 - (kernel_index + GAUSSIAN_KERNEL_SIZE / 2)] as i32;
+                    let p2 = GAUSSIAN_KERNEL[GAUSSIAN_KERNEL_SIZE - 1 - kernel_index] as i32;
+                    let p3 = GAUSSIAN_KERNEL[kernel_index + GAUSSIAN_KERNEL_SIZE / 2] as i32;
+                    let p4 = GAUSSIAN_KERNEL[kernel_index] as i32;
 
                     (s1 * p1 + s2 * p2 + s3 * p3 + s4 * p4) >> 11
                 },
+                ResamplingMode::Cubic => {
+                    let table_index = ((self.sample_pos & 0xFF0) >> 2) as usize;
+                    let p1 = CUBIC_SPLINE_KERNEL[table_index] as i32;
+                    let p2 = CUBIC_SPLINE_KERNEL[table_index + 1] as i32;
+                    let p3 = CUBIC_SPLINE_KERNEL[table_index + 2] as i32;
+                    let p4 = CUBIC_SPLINE_KERNEL[table_index + 3] as i32;
+
+                    (s1 * p1 + s2 * p2 + s3 * p3 + s4 * p4) >> 15
+                },
+                ResamplingMode::Sinc => {
+                    let table_index = ((self.sample_pos & 0xFF0) >> 1) as usize;
+
+                    let s5 = self.resample_buffer[(base_pos + 4) % RESAMPLE_BUFFER_LEN];
+                    let s6 = self.resample_buffer[(base_pos + 5) % RESAMPLE_BUFFER_LEN];
+                    let s7 = self.resample_buffer[(base_pos + 6) % RESAMPLE_BUFFER_LEN];
+                    let s8 = self.resample_buffer[(base_pos + 7) % RESAMPLE_BUFFER_LEN];
+
+                    let p1 = SINC_KERNEL[table_index] as i32;
+                    let p2 = SINC_KERNEL[table_index + 1] as i32;
+                    let p3 = SINC_KERNEL[table_index + 2] as i32;
+                    let p4 = SINC_KERNEL[table_index + 3] as i32;
+                    let p5 = SINC_KERNEL[table_index + 4] as i32;
+                    let p6 = SINC_KERNEL[table_index + 5] as i32;
+                    let p7 = SINC_KERNEL[table_index + 6] as i32;
+                    let p8 = SINC_KERNEL[table_index + 7] as i32;
+
+                    (s1 * p1 + s2 * p2 + s3 * p3 + s4 * p4 + s5 * p5 + s6 * p6 + s7 * p7 + s8 * p8) >> 15
+                },
                 ResamplingMode::Accurate => {
                     let kernel_index = ((self.sample_pos & 0xFFF) >> 4) as usize;
-                    let p1 = ACCURATE_KERNEL[ACCURATE_KERNEL_SIZE - 1 - (kernel_index + ACCURATE_KERNEL_SIZE / 2)] as i32;
-                    let p2 = ACCURATE_KERNEL[ACCURATE_KERNEL_SIZE - 1 - kernel_index] as i32;
-                    let p3 = ACCURATE_KERNEL[kernel_index + ACCURATE_KERNEL_SIZE / 2] as i32;
-                    let p4 = ACCURATE_KERNEL[kernel_index] as i32;
+                    let p1 = ACCURATE_GAUSSIAN_KERNEL[ACCURATE_GAUSSIAN_KERNEL_SIZE - 1 - (kernel_index + ACCURATE_GAUSSIAN_KERNEL_SIZE / 2)] as i32;
+                    let p2 = ACCURATE_GAUSSIAN_KERNEL[ACCURATE_GAUSSIAN_KERNEL_SIZE - 1 - kernel_index] as i32;
+                    let p3 = ACCURATE_GAUSSIAN_KERNEL[kernel_index + ACCURATE_GAUSSIAN_KERNEL_SIZE / 2] as i32;
+                    let p4 = ACCURATE_GAUSSIAN_KERNEL[kernel_index] as i32;
 
                     let c1 = (s1 * p1) >> 11;
                     let c2 = (s2 * p2) >> 11;

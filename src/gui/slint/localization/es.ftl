@@ -50,6 +50,8 @@ resampling-type-label = Interpolación de samples:
 resampling-type-accurate = Gaussian preciso al hardware
 resampling-type-gaussian = Gaussian de alta fidelidad
 resampling-type-linear = Lineal
+resampling-type-cubic = Spline cúbico
+resampling-type-sinc = Sinc
 
 blargg-dsp-filter-checkbox-label = Usar el filtro DSP de Blargg
 
