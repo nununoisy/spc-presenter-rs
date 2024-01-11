@@ -23,18 +23,17 @@ video.
 ## Features
 
 - Supports SPC modules.
+  - Support for Script700 is planned.
   - Support for songs that require 5A22/65816 emulation (SMC/SNSF) are planned.
 - Based on a custom fork of snes-apu with a much more accurate S-DSP:
   - Reorders operations to more closely match a cycle-accurate implementation.
   - Properly emulates internal register sizes and wraps/clamps values accurately.
   - Implements all S-DSP register reads and writes, many of which were previously missing.
   - Reimplements the FIR filter to properly overflow and use the correct taps.
+  - Reimplements the BRR decoder to properly decode 4 samples at a time.
+  - Added hardware-accurate sample interpolation.
   - Correctly mixes negative channel volumes (SNES "surround").
-  - Fixes a race condition that is triggered when dynamically resizing the echo buffer.
   - Remaining inaccuracies to be fixed:
-    - BRR samples are decoded one block at a time instead of 4 samples at a time.
-    - ENDX latch timing is slightly inaccurate which can lead to timing errors in
-      some drivers.
     - S-DSP is not yet cycle-accurate. It instead runs in 64 SMP-clock periods.
 - Automatic BRR sample analysis:
   - Rips samples from the S-DSP as the song plays.
@@ -52,13 +51,15 @@ video.
   - The UI displays ripped samples and allows you to play them.
     - Useful for fine-tuning sample fundamental pitch...
     - ...or just to play around with the samples a bit.
+  - Support for modules with non-trivial sample directory layouts
+    (self-modifying samples/sample streaming) is planned.
   - Support is planned for automatic percussion classification.
   - Support is planned for automatic polyphonic sample pitch detection.
 - Outputs a video file:
     - Customizable resolution (default 1080p) at 60 FPS.
     - MPEG-4 container with fast-start (`moov` atom at beginning of file).
     - Matroska (MKV) and QuickTime (MOV) containers are also supported.
-    - yuv420p H.264 video stream encoded with libx264, crf: 16.
+    - yuv420p H.264 video stream encoded with libx264, crf: 20.
     - If using QuickTime, ProRes 4444 streams encoded with prores_ks are also supported.
     - Stereo AAC LC audio stream encoded with FFmpeg's aac encoder, bitrate: 384k.
 - Video files are suitable for direct upload to most websites:
@@ -128,6 +129,12 @@ Additional options:
 - `-S [fadeout]`: select the fadeout duration in frames (default: 180).
 - `--ow [width]`: select the output resolution width (default: 1920)
 - `--oh [height]`: select the output resolution height (default: 1080)
+- `-I [interpolation_type]`: Specify the sample interpolation filter:
+    - `accurate`: Hardware-accurate Gaussian filter (default)
+    - `gaussian`: High-resolution 4-point Gaussian filter
+    - `linear`: 2-point averaging filter
+    - `cubic`: 4-point cubic Hermite spline filter
+    - `sinc`: 8-point Whittaker-Shannon (sinc) filter
 - `-t [source_index]:[tuning_type]:[params]`: Specify manual tuning for a sample
   by source index:
     - `0:hz:500.0` tunes source index 0 to 500.0 Hz at pitch $1.000
@@ -141,6 +148,7 @@ Additional options:
     - `-P $12:hsl(120, 100%, 63%)` sets the color for source index 18 to `#40ff40`.
     - Colors are parsed with the [`csscolorparser` crate][csscolorparser].
 - `-B [background_file]`: add a background to the rendered video.
+- `-i [config_file]`: import a TOML configuration file.
 - `-h`: Additional help + options
     - Note: options not listed here are unstable and may cause crashes or
       other errors.
