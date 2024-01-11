@@ -184,7 +184,7 @@ impl VideoBuilder {
             codec::Id::H264 | codec::Id::H265 => {
                 context_options.set("preset", "veryfast");
                 context_options.set("crf", "20");
-                context_options.set("tune", "film");
+                context_options.set("tune", "zerolatency");
             },
             _ => ()
         };
