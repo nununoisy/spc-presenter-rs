@@ -8,6 +8,7 @@ use std::str::FromStr;
 use csscolorparser::Color as CssColor;
 use tiny_skia::Color;
 use crate::config::Config;
+use crate::emulator::ResamplingMode;
 use crate::renderer::{Renderer, render_options::{RendererOptions, StopCondition}};
 use crate::sample_processing::{SampleProcessor, SampleProcessorProgress};
 use crate::tuning;
@@ -74,6 +75,17 @@ fn sample_color_value_parser(s: &str) -> Result<(u8, Color)> {
     ).unwrap()))
 }
 
+fn resampling_mode_parser(s: &str) -> Result<ResamplingMode> {
+    match s {
+        "accurate" => Ok(ResamplingMode::Accurate),
+        "gaussian" => Ok(ResamplingMode::Gaussian),
+        "linear" => Ok(ResamplingMode::Linear),
+        "cubic" => Ok(ResamplingMode::Cubic),
+        "sinc" => Ok(ResamplingMode::Sinc),
+        invalid => bail!("Invalid resampling mode '{}' (must be one of 'accurate', 'gaussian', 'linear', 'cubic', 'sinc').", invalid)
+    }
+}
+
 fn get_renderer_options() -> RendererOptions {
     let matches = Command::new("SPCPresenter")
         .arg(arg!(-c --"video-codec" <CODEC> "Set the output video codec")
@@ -116,6 +128,9 @@ fn get_renderer_options() -> RendererOptions {
             .required(false)
             .value_parser(codec_option_value_parser)
             .action(ArgAction::Append))
+        .arg(arg!(-I --"interpolation-type" <TYPE> "Specify DSP sample interpolation method.")
+            .required(false)
+            .value_parser(resampling_mode_parser))
         .arg(arg!(-t --"manual-tune" <TUNING> "Manually specify sample tuning (sample_index:type:param,param,...)")
             .required(false)
             .value_parser(sample_tuning_value_parser)
@@ -191,6 +206,10 @@ fn get_renderer_options() -> RendererOptions {
         }
     }
     options.sample_tunings = sample_processor.finish();
+
+    if let Some(resampling_mode) = matches.get_one::<ResamplingMode>("interpolation-type").cloned() {
+        options.config.emulator.resampling_mode = resampling_mode;
+    }
 
     if let Some(super_midi_pak_session_path) = matches.get_one::<PathBuf>("super-midi-pak-session").cloned() {
         let session_json = fs::read_to_string(super_midi_pak_session_path).unwrap();
