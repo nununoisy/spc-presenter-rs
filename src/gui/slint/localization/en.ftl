@@ -70,7 +70,7 @@ progress-status-render-error = Render error: {$error}
 progress-status-render-starting = Preparing your music
 progress-status-rendering = { NUMBER($progress, style: "percent") }, {$fps} FPS, encoded {$encodedDuration}/{$expectedDuration} ({$videoSize}), {$eta}
 progress-status-render-finished = Render finished
-progress-status-render-cancelled = Render cancelled
+progress-status-render-cancelled = Render canceled
 progress-status-processor-error = Processing error: {$error}
 progress-status-processor-starting = Preparing to detect samples
 progress-status-processing-detecting-samples = { NUMBER($progress, style: "percent") }, found {$detectedSamples ->
@@ -79,7 +79,7 @@ progress-status-processing-detecting-samples = { NUMBER($progress, style: "perce
 }
 progress-status-processing-processing-samples = { NUMBER($progress, style: "percent") }, processing sample {$sourceIndex} ({$currentSample}/{$totalSamples})
 progress-status-processor-finished = Processing finished
-progress-status-processor-cancelled = Processing cancelled
+progress-status-processor-cancelled = Processing canceled
 
 error-message-spc-file-invalid = Invalid SPC file: {$error}
 error-message-config-read-error = Failed to read configuration file: {$error}
@@ -90,6 +90,19 @@ error-message-tuning-read-error = Failed to read tuning data: {$error}
 error-message-tuning-parse-error = Invalid tuning data: {$error}
 error-message-tuning-unrecognized-format = Unrecognized tuning data format.
 error-message-tuning-sample-write-error = Failed to dump sample: {$error}
+
+file-dialog-filter-all = All supported formats
+file-dialog-filter-config = TOML configuration file
+file-dialog-filter-spc = SPC file
+file-dialog-filter-brr = BRR sample
+file-dialog-filter-video-background = Video background formats
+file-dialog-filter-image-background = Image background formats
+file-dialog-filter-super-midi-pak-session = Super MIDI Pak session
+file-dialog-filter-output-mpeg4 = MPEG-4 video
+file-dialog-filter-output-matroska = Matroska video
+file-dialog-filter-output-quicktime = QuickTime video
+
+prores-export-dialog-prompt = You have chosen to export a QuickTime video. Do you want to export in ProRes 4444 format to preserve alpha information for video editing? Note that ProRes 4444 is a lossless codec, so the exported file may be very large.
 
 formatted-duration-error = <error>
 formatted-duration-unknown = <unknown>

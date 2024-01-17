@@ -202,6 +202,32 @@ error-message-tuning-unrecognized-format = Unrecognized tuning data format.
 # $error (String) - Error message from operating system.
 error-message-tuning-sample-write-error = Failed to dump sample: {$error}
 
+## File dialog filter labels
+# Label for aggregate of all supported file types for an operation
+file-dialog-filter-all = All supported formats
+# Label for TOML configuration files (.toml)
+file-dialog-filter-config = TOML configuration file
+# Label for SPC700 program dumps (.spc)
+file-dialog-filter-spc = SPC file
+# Label for BRR sample files (.brr)
+file-dialog-filter-brr = BRR sample
+# Label for video background files (.mp4, .mkv, .mov, etc.)
+file-dialog-filter-video-background = Video background formats
+# Label for image background files (.jpg, .png, .webp, etc.)
+file-dialog-filter-image-background = Image background formats
+# Label for Super MIDI Pak session JSON files (.json)
+file-dialog-filter-super-midi-pak-session = Super MIDI Pak session
+# Label for MPEG-4 video files (.mp4)
+file-dialog-filter-output-mpeg4 = MPEG-4 video
+# Label for Matroska video files (.mkv)
+file-dialog-filter-output-matroska = Matroska video
+# Label for QuickTime video files (.mov)
+file-dialog-filter-output-quicktime = QuickTime video
+
+## Dialog text
+# Query for the user to encode the render with ProRes 4444 to preserve alpha information.
+prores-export-dialog-prompt = You have chosen to export a QuickTime video. Do you want to export in ProRes 4444 format to preserve alpha information for video editing? Note that ProRes 4444 is a lossless codec, so the exported file may be very large.
+
 ## Formatted duration
 # Formatted duration: error placeholder
 formatted-duration-error = <error>

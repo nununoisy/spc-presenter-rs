@@ -16,7 +16,7 @@ use tiny_skia::Color;
 use render_thread::{RenderThreadMessage, RenderThreadRequest};
 use sample_processing_thread::{SampleProcessingThreadMessage, SampleProcessingThreadRequest};
 use audio_previewer::{AudioPreviewer, audio_stopped_timer};
-use localization::fluent_args;
+use localization::{LocalizationAdapter, fluent_args};
 use fluent::FluentArgs;
 use crate::config::Config;
 use crate::emulator::ResamplingMode;
@@ -61,96 +61,127 @@ fn slint_duration(duration: Duration) -> i64 {
     duration.as_millis() as i64
 }
 
-fn browse_for_module_dialog() -> Option<String> {
-    let file = FileDialog::new()
-        .add_filter("All supported formats", &["spc"])
-        .add_filter("SPC files", &["spc"])
-        .show_open_single_file();
+fn browse_for_module_dialog(localization_adapter: Arc<Mutex<LocalizationAdapter>>) -> Option<String> {
+    let localization_adapter = localization_adapter.lock().unwrap();
+    let filter_all = localization_adapter.get("file-dialog-filter-all", None, true);
+    let filter_spc = localization_adapter.get("file-dialog-filter-spc", None, true);
+    drop(localization_adapter);
 
-    match file {
+    let dialog = FileDialog::new()
+        .add_filter(filter_all.as_str(), &["spc"])
+        .add_filter(filter_spc.as_str(), &["spc"]);
+
+    match dialog.show_open_single_file() {
         Ok(Some(path)) => Some(path.to_str().unwrap().to_string()),
         _ => None
     }
 }
 
-fn browse_for_background_dialog() -> Option<String> {
-    let file = FileDialog::new()
-        .add_filter("All supported formats", &["mp4", "mkv", "mov", "avi", "webm", "gif", "jpg", "jpeg", "png", "bmp", "tif", "tiff", "webp", "qoi"])
-        .add_filter("Video background formats", &["mp4", "mkv", "mov", "avi", "webm", "gif"])
-        .add_filter("Image background formats", &["jpg", "jpeg", "png", "bmp", "tif", "tiff", "webp", "qoi"])
-        .show_open_single_file();
+fn browse_for_background_dialog(localization_adapter: Arc<Mutex<LocalizationAdapter>>) -> Option<String> {
+    let localization_adapter = localization_adapter.lock().unwrap();
+    let filter_all = localization_adapter.get("file-dialog-filter-all", None, true);
+    let filter_video = localization_adapter.get("file-dialog-filter-video-background", None, true);
+    let filter_image = localization_adapter.get("file-dialog-filter-image-background", None, true);
+    drop(localization_adapter);
 
-    match file {
+    let dialog = FileDialog::new()
+        .add_filter(filter_all.as_str(), &["mp4", "mkv", "mov", "avi", "webm", "gif", "jpg", "jpeg", "png", "bmp", "tif", "tiff", "webp", "qoi"])
+        .add_filter(filter_video.as_str(), &["mp4", "mkv", "mov", "avi", "webm", "gif"])
+        .add_filter(filter_image.as_str(), &["jpg", "jpeg", "png", "bmp", "tif", "tiff", "webp", "qoi"]);
+
+    match dialog.show_open_single_file() {
         Ok(Some(path)) => Some(path.to_str().unwrap().to_string()),
         _ => None
     }
 }
 
-fn browse_for_tuning_data() -> Option<String> {
-    let file = FileDialog::new()
-        .add_filter("All supported formats", &["json"])
-        .add_filter("Super MIDI Pak session files", &["json"])
-        .show_open_single_file();
+fn browse_for_tuning_data(localization_adapter: Arc<Mutex<LocalizationAdapter>>) -> Option<String> {
+    let localization_adapter = localization_adapter.lock().unwrap();
+    let filter_all = localization_adapter.get("file-dialog-filter-all", None, true);
+    let filter_super_midi_pak = localization_adapter.get("file-dialog-filter-super-midi-pak-session", None, true);
+    drop(localization_adapter);
 
-    match file {
+    let dialog = FileDialog::new()
+        .add_filter(filter_all.as_str(), &["json"])
+        .add_filter(filter_super_midi_pak.as_str(), &["json"]);
+
+    match dialog.show_open_single_file() {
         Ok(Some(path)) => Some(path.to_str().unwrap().to_string()),
         _ => None
     }
 }
 
-fn browse_for_video_dialog() -> Option<String> {
-    let file = FileDialog::new()
-        .add_filter("All supported formats", &["mp4", "mkv", "mov"])
-        .add_filter("MPEG-4 Video", &["mp4"])
-        .add_filter("Matroska Video", &["mkv"])
-        .add_filter("QuickTime Video", &["mov"])
-        .show_save_single_file();
+fn browse_for_video_dialog(localization_adapter: Arc<Mutex<LocalizationAdapter>>) -> Option<String> {
+    let localization_adapter = localization_adapter.lock().unwrap();
+    let filter_all = localization_adapter.get("file-dialog-filter-all", None, true);
+    let filter_output_mpeg4 = localization_adapter.get("file-dialog-filter-output-mpeg4", None, true);
+    let filter_output_matroska = localization_adapter.get("file-dialog-filter-output-matroska", None, true);
+    let filter_output_quicktime = localization_adapter.get("file-dialog-filter-output-quicktime", None, true);
+    drop(localization_adapter);
 
-    match file {
+    let dialog = FileDialog::new()
+        .add_filter(filter_all.as_str(), &["mp4", "mkv", "mov"])
+        .add_filter(filter_output_mpeg4.as_str(), &["mp4"])
+        .add_filter(filter_output_matroska.as_str(), &["mkv"])
+        .add_filter(filter_output_quicktime.as_str(), &["mov"]);
+
+    match dialog.show_save_single_file() {
         Ok(Some(path)) => Some(path.to_str().unwrap().to_string()),
         _ => None
     }
 }
 
-fn browse_for_config_import_dialog() -> Option<String> {
-    let file = FileDialog::new()
-        .add_filter("Configuration File", &["toml"])
-        .show_open_single_file();
+fn browse_for_config_import_dialog(localization_adapter: Arc<Mutex<LocalizationAdapter>>) -> Option<String> {
+    let localization_adapter = localization_adapter.lock().unwrap();
+    let filter_config = localization_adapter.get("file-dialog-filter-config", None, true);
+    drop(localization_adapter);
 
-    match file {
+    let dialog = FileDialog::new()
+        .add_filter(filter_config.as_str(), &["toml"]);
+
+    match dialog.show_open_single_file() {
         Ok(Some(path)) => Some(path.to_str().unwrap().to_string()),
         _ => None
     }
 }
 
-fn browse_for_config_export_dialog() -> Option<String> {
-    let file = FileDialog::new()
-        .add_filter("Configuration File", &["toml"])
-        .show_save_single_file();
+fn browse_for_config_export_dialog(localization_adapter: Arc<Mutex<LocalizationAdapter>>) -> Option<String> {
+    let localization_adapter = localization_adapter.lock().unwrap();
+    let filter_config = localization_adapter.get("file-dialog-filter-config", None, true);
+    drop(localization_adapter);
 
-    match file {
+    let dialog = FileDialog::new()
+        .add_filter(filter_config.as_str(), &["toml"]);
+
+    match dialog.show_save_single_file() {
         Ok(Some(path)) => Some(path.to_str().unwrap().to_string()),
         _ => None
     }
 }
 
-fn confirm_prores_export_dialog() -> bool {
-    MessageDialog::new()
+fn confirm_prores_export_dialog(localization_adapter: Arc<Mutex<LocalizationAdapter>>) -> bool {
+    let localization_adapter = localization_adapter.lock().unwrap();
+    let dialog_prompt = localization_adapter.get("prores-export-dialog-prompt", None, true);
+    drop(localization_adapter);
+
+    let dialog = MessageDialog::new()
         .set_title("SPCPresenter")
-        .set_text("You have chosen to export a QuickTime video. Do you want to export in ProRes 4444 format to \
-                   preserve alpha information for video editing? Note that ProRes 4444 is a lossless codec, so \
-                   the exported file may be very large.")
-        .set_type(MessageType::Info)
-        .show_confirm()
-        .unwrap()
+        .set_text(dialog_prompt.as_str())
+        .set_type(MessageType::Info);
+
+
+    dialog.show_confirm().unwrap_or_default()
 }
 
-fn browse_for_dump_dialog() -> Option<String> {
-    let file = FileDialog::new()
-        .add_filter("BRR samples", &["brr"])
-        .show_save_single_file();
+fn browse_for_dump_dialog(localization_adapter: Arc<Mutex<LocalizationAdapter>>) -> Option<String> {
+    let localization_adapter = localization_adapter.lock().unwrap();
+    let filter_brr = localization_adapter.get("file-dialog-filter-brr", None, true);
+    drop(localization_adapter);
 
-    match file {
+    let dialog = FileDialog::new()
+        .add_filter(filter_brr.as_str(), &["brr"]);
+
+    match dialog.show_save_single_file() {
         Ok(Some(path)) => Some(path.to_str().unwrap().to_string()),
         _ => None
     }
@@ -159,7 +190,7 @@ fn browse_for_dump_dialog() -> Option<String> {
 fn display_error_dialog(text: &str) {
     MessageDialog::new()
         .set_title("SPCPresenter")
-        .set_text(text.replace('\u{2068}', "").replace('\u{2069}', "").as_str())
+        .set_text(text)
         .set_type(MessageType::Error)
         .show_alert()
         .unwrap();
@@ -271,7 +302,7 @@ pub fn run() {
         format!("${:02x}", i).into()
     });
 
-    let localization_adapter = Arc::new(Mutex::new(localization::LocalizationAdapter::new()));
+    let localization_adapter = Arc::new(Mutex::new(LocalizationAdapter::new()));
     if let Ok(language) = env::var("PRESENTER_LANG") {
         localization_adapter.lock().unwrap().set_language(&language);
     }
@@ -280,7 +311,7 @@ pub fn run() {
         let localization_adapter = localization_adapter.clone();
         main_window.global::<Localization>().on_tr(move |message_id| {
             let localization_adapter = localization_adapter.lock().unwrap();
-            localization_adapter.get(message_id.as_str(), None).into()
+            localization_adapter.get(message_id.as_str(), None, false).into()
         });
     }
 
@@ -298,7 +329,7 @@ pub fn run() {
                 }
             }
 
-            localization_adapter.get(message_id.as_str(), Some(&args)).into()
+            localization_adapter.get(message_id.as_str(), Some(&args), false).into()
         });
     }
 
@@ -378,7 +409,7 @@ pub fn run() {
         let options = options.clone();
         let localization_adapter = localization_adapter.clone();
         main_window.on_import_config(move || {
-            match browse_for_config_import_dialog() {
+            match browse_for_config_import_dialog(localization_adapter.clone()) {
                 Some(path) => {
                     let new_config_str = match fs::read_to_string(path) {
                         Ok(d) => d,
@@ -386,7 +417,7 @@ pub fn run() {
                             let message = localization_adapter
                                 .lock()
                                 .unwrap()
-                                .get("error-message-config-read-error", Some(&fluent_args!(error: e.to_string())));
+                                .get("error-message-config-read-error", Some(&fluent_args!(error: e.to_string())), true);
                             display_error_dialog(&message);
                             return;
                         }
@@ -397,7 +428,7 @@ pub fn run() {
                             let message = localization_adapter
                                 .lock()
                                 .unwrap()
-                                .get("error-message-config-parse-error", Some(&fluent_args!(error: e.to_string())));
+                                .get("error-message-config-parse-error", Some(&fluent_args!(error: e.to_string())), true);
                             display_error_dialog(&message);
                             return;
                         }
@@ -414,7 +445,7 @@ pub fn run() {
         let options = options.clone();
         let localization_adapter = localization_adapter.clone();
         main_window.on_export_config(move || {
-            match browse_for_config_export_dialog() {
+            match browse_for_config_export_dialog(localization_adapter.clone()) {
                 Some(path) => {
                     main_window_weak.unwrap().invoke_update_config(true);
 
@@ -424,7 +455,7 @@ pub fn run() {
                             let message = localization_adapter
                                 .lock()
                                 .unwrap()
-                                .get("error-message-config-serialize-error", Some(&fluent_args!(error: e.to_string())));
+                                .get("error-message-config-serialize-error", Some(&fluent_args!(error: e.to_string())), true);
                             display_error_dialog(&message);
                             return;
                         }
@@ -436,7 +467,7 @@ pub fn run() {
                             let message = localization_adapter
                                 .lock()
                                 .unwrap()
-                                .get("error-message-config-write-error", Some(&fluent_args!(error: e.to_string())));
+                                .get("error-message-config-write-error", Some(&fluent_args!(error: e.to_string())), true);
                             display_error_dialog(&message);
                             return;
                         }
@@ -614,7 +645,7 @@ pub fn run() {
         let spt_tx = spt_tx.clone();
         let localization_adapter = localization_adapter.clone();
         main_window.on_browse_for_module(move || {
-            match browse_for_module_dialog() {
+            match browse_for_module_dialog(localization_adapter.clone()) {
                 Some(path) => {
                     let metadata_lines = match get_spc_metadata(&path) {
                         Ok((_duration, metadata_lines)) => metadata_lines,
@@ -622,7 +653,7 @@ pub fn run() {
                             let message = localization_adapter
                                 .lock()
                                 .unwrap()
-                                .get("error-message-spc-file-invalid", Some(&fluent_args!(error: e.to_string())));
+                                .get("error-message-spc-file-invalid", Some(&fluent_args!(error: e.to_string())), true);
                             display_error_dialog(&message);
                             return options.lock().unwrap().input_path.clone().into();
                         }
@@ -647,8 +678,9 @@ pub fn run() {
 
     {
         let options = options.clone();
+        let localization_adapter = localization_adapter.clone();
         main_window.on_browse_for_background(move || {
-            match browse_for_background_dialog() {
+            match browse_for_background_dialog(localization_adapter.clone()) {
                 Some(path) => {
                     options.lock().unwrap().video_options.background_path = Some(path.clone().into());
 
@@ -692,7 +724,7 @@ pub fn run() {
         let main_window_weak = main_window.as_weak();
         let localization_adapter = localization_adapter.clone();
         main_window.on_import_tunings(move || {
-            let tuning_data_path = match browse_for_tuning_data() {
+            let tuning_data_path = match browse_for_tuning_data(localization_adapter.clone()) {
                 Some(path) => path,
                 None => return
             };
@@ -708,7 +740,7 @@ pub fn run() {
                         let message = localization_adapter
                             .lock()
                             .unwrap()
-                            .get("error-message-tuning-read-error", Some(&fluent_args!(error: e.to_string())));
+                            .get("error-message-tuning-read-error", Some(&fluent_args!(error: e.to_string())), true);
                         display_error_dialog(&message);
                         return;
                     }
@@ -720,7 +752,7 @@ pub fn run() {
                         let message = localization_adapter
                             .lock()
                             .unwrap()
-                            .get("error-message-tuning-parse-error", Some(&fluent_args!(error: e.to_string())));
+                            .get("error-message-tuning-parse-error", Some(&fluent_args!(error: e.to_string())), true);
                         display_error_dialog(&message);
                         return;
                     }
@@ -739,7 +771,7 @@ pub fn run() {
                 let message = localization_adapter
                     .lock()
                     .unwrap()
-                    .get("error-message-tuning-unrecognized-data-format", None);
+                    .get("error-message-tuning-unrecognized-data-format", None, true);
                 display_error_dialog(&message);
                 return;
             }
@@ -795,7 +827,7 @@ pub fn run() {
             let options = options.lock().unwrap();
             let source = sample_config.source as u8;
             if let Some(sample_data) = options.sample_tunings.get(&source) {
-                let output_path = match browse_for_dump_dialog() {
+                let output_path = match browse_for_dump_dialog(localization_adapter.clone()) {
                     Some(path) => path,
                     None => return
                 };
@@ -805,7 +837,7 @@ pub fn run() {
                     let message = localization_adapter
                         .lock()
                         .unwrap()
-                        .get("error-message-tuning-sample-write-error", Some(&fluent_args!(error: e.to_string())));
+                        .get("error-message-tuning-sample-write-error", Some(&fluent_args!(error: e.to_string())), true);
                     display_error_dialog(&message);
                 }
             }
@@ -816,13 +848,14 @@ pub fn run() {
         let main_window_weak = main_window.as_weak();
         let options = options.clone();
         let rt_tx = rt_tx.clone();
+        let localization_adapter = localization_adapter.clone();
         main_window.on_start_render(move || {
-            let output_path = match browse_for_video_dialog() {
+            let output_path = match browse_for_video_dialog(localization_adapter.clone()) {
                 Some(path) => path,
                 None => return
             };
 
-            if output_path.ends_with(".mov") && confirm_prores_export_dialog() {
+            if output_path.ends_with(".mov") && confirm_prores_export_dialog(localization_adapter.clone()) {
                 // -c:v prores_ks -profile:v 4 -bits_per_mb 1000 -pix_fmt yuva444p10le
                 options.lock().unwrap().video_options.video_codec = "prores_ks".to_string();
                 options.lock().unwrap().video_options.video_codec_params.insert("profile".to_string(), "4".to_string());

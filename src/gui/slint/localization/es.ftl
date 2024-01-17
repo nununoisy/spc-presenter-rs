@@ -83,13 +83,26 @@ progress-status-processor-cancelled = Procesando cancelado
 
 error-message-spc-file-invalid = Archivo SPC inválido: {$error}
 error-message-config-read-error = Error al leer el archivo de configuración: {$error}
-error-message-config-parse-error = Archivo configuración inválido: {$error}
+error-message-config-parse-error = Archivo de configuración inválido: {$error}
 error-message-config-write-error = Error al transcribir el archivo de configuración: {$error}
 error-message-config-serialize-error = Error al serializar la configuración: {$error}
 error-message-tuning-read-error = Error al leer los datos de afinación: {$error}
 error-message-tuning-parse-error = Datos de afinación inválidos: {$error}
 error-message-tuning-unrecognized-format = Datos de afinación tienen un formato desconocido.
 error-message-tuning-sample-write-error = Error al copiar el sample: {$error}
+
+file-dialog-filter-all = Todos formatos compatibles
+file-dialog-filter-config = Archivo de configuración TOML
+file-dialog-filter-spc = Archivo SPC
+file-dialog-filter-brr = Sample BRR
+file-dialog-filter-video-background = Formatos de vídeo de fondo
+file-dialog-filter-image-background = Formatos de imagen de fondo
+file-dialog-filter-super-midi-pak-session = Sesión de Super MIDI Pak
+file-dialog-filter-output-mpeg4 = Vídeo MPEG-4
+file-dialog-filter-output-matroska = Vídeo Matroska
+file-dialog-filter-output-quicktime = Vídeo QuickTime
+
+prores-export-dialog-prompt = Escogió exportar un vídeo QuickTime. ¿Quieres utilizar el códec ProRes 4444 para mantener la información alfa para que pudiere importarla en un editor de vídeo? Tenga en cuenta que ProRes 4444 es un códec sin pérdida y entonces el vídeo exportado podría ser muy grande.
 
 formatted-duration-error = <error>
 formatted-duration-unknown = <desconocido>

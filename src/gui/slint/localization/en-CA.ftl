@@ -62,7 +62,7 @@ progress-title-idle = Idle
 progress-title-starting = Setting up
 progress-title-rendering = Rendering
 progress-title-rendering-to-loop-point = Rendering to loop point
-progress-title-rendering-initializing = Initialising
+progress-title-rendering-initializing = Initializing
 progress-title-processing-detecting-samples = Detecting samples
 progress-title-processing-processing-samples = Processing samples
 
@@ -85,10 +85,10 @@ error-message-spc-file-invalid = Invalid SPC file: {$error}
 error-message-config-read-error = Failed to read configuration file: {$error}
 error-message-config-parse-error = Invalid configuration file: {$error}
 error-message-config-write-error = Failed to write configuration file: {$error}
-error-message-config-serialize-error = Failed to serialise configuration: {$error}
+error-message-config-serialize-error = Failed to serialize configuration: {$error}
 error-message-tuning-read-error = Failed to read tuning data: {$error}
 error-message-tuning-parse-error = Invalid tuning data: {$error}
-error-message-tuning-unrecognized-format = Unrecognised tuning data format.
+error-message-tuning-unrecognized-format = Unrecognized tuning data format.
 error-message-tuning-sample-write-error = Failed to dump sample: {$error}
 
 file-dialog-filter-all = All supported formats
