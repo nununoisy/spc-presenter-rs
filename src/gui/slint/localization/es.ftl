@@ -119,7 +119,7 @@ remaining-duration-minutes = { $n ->
 }
 remaining-duration-seconds = { $n ->
     [one] queda {$n} segundo
-    *[other] queda {$n} segundos
+    *[other] quedan {$n} segundos
 }
 remaining-duration-less-than-a-second = queda menos de un segundo
 
