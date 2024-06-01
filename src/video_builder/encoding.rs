@@ -30,14 +30,19 @@ fn copy_data_to_frame(frame: &mut frame::Video, data: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn fast_background_blit(fg: &mut frame::Video, bg: &frame::Video) {
+fn fast_background_blit(fg: &mut frame::Video, bg: &frame::Video, dim: bool) {
     const RB_MASK: u32 = 0xFF00FF;
     const G_MASK: u32 = 0x00FF00;
 
     for (fg_arr, bg_arr) in zip(fg.plane_mut::<[u8; 4]>(0).iter_mut(), bg.plane::<[u8; 4]>(0).iter()) {
         let fg_color = u32::from_le_bytes(*fg_arr) & (RB_MASK | G_MASK);
 
-        let pre_blit_bg_arr = [bg_arr[0] / 2, bg_arr[1] / 2, bg_arr[2] / 2, 255];
+        let pre_blit_bg_arr = if dim {
+            [bg_arr[0] / 2, bg_arr[1] / 2, bg_arr[2] / 2, 255]
+        } else {
+            [bg_arr[0], bg_arr[1], bg_arr[2], 255]
+        };
+
         let bg_color = u32::from_le_bytes(pre_blit_bg_arr) & (RB_MASK | G_MASK);
 
         let a = fg_arr[3] as u32;
@@ -75,7 +80,7 @@ impl VideoBuilder {
         self.v_sws_ctx.run(&input_frame, &mut resize_frame).vb_unwrap()?;
 
         let background_frame = self.background.as_mut().unwrap().next_frame();
-        fast_background_blit(&mut resize_frame, &background_frame);
+        fast_background_blit(&mut resize_frame, &background_frame, self.options.dim_background);
 
         let mut output_frame = frame::Video::new(self.v_swc_ctx.output().format, self.v_swc_ctx.output().width, self.v_swc_ctx.output().height);
         self.v_swc_ctx.run(&resize_frame, &mut output_frame).vb_unwrap()?;

@@ -145,6 +145,9 @@ fn get_renderer_options() -> RendererOptions {
         .arg(arg!(-B --"background" <BACKGROUND> "Set the output background")
             .required(false)
             .value_parser(value_parser!(PathBuf)))
+        .arg(arg!(--"no-dim" "Disable background dimming")
+            .required(false)
+            .action(ArgAction::SetTrue))
         .arg(arg!(-i --"import-config" <CONFIGFILE> "Import configuration from a RusticNES TOML file.")
             .value_parser(value_parser!(PathBuf))
             .required(false))
@@ -237,6 +240,7 @@ fn get_renderer_options() -> RendererOptions {
     if let Some(background_path) = matches.get_one::<PathBuf>("background").cloned() {
         options.video_options.background_path = Some(background_path.to_str().unwrap().to_string());
     }
+    options.video_options.dim_background = !matches.get_flag("no-dim");
 
     options
 }

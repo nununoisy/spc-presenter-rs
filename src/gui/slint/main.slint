@@ -99,6 +99,7 @@ export component MainWindow inherits Window {
     in-out property <int> output-width: 1920;
     in-out property <int> output-height: 1080;
     in-out property <bool> filter-enabled: true;
+    in-out property <bool> dim-background: true;
 
     out property <StopConditionType> stop-condition-type: StopConditionType.Time;
     out property <int> stop-condition-num: 300;
@@ -535,6 +536,12 @@ export component MainWindow inherits Window {
             CheckBox {
                 text: Localization.tr("blargg-dsp-filter-checkbox-label");
                 checked <=> root.filter-enabled;
+                enabled: !root.rendering;
+            }
+
+            CheckBox {
+                text: Localization.tr("dim-background-checkbox-label");
+                checked <=> root.dim-background;
                 enabled: !root.rendering;
             }
         }

@@ -6,6 +6,7 @@ pub struct VideoOptions {
     pub output_path: String,
     pub metadata: HashMap<String, String>,
     pub background_path: Option<String>,
+    pub dim_background: bool,
 
     pub video_time_base: Rational,
     pub video_codec: String,

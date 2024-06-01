@@ -912,6 +912,7 @@ pub fn run() {
             if options.lock().unwrap().video_options.background_path.clone().unwrap_or("".to_string()).is_empty() {
                 options.lock().unwrap().video_options.background_path = None;
             }
+            options.lock().unwrap().video_options.dim_background = main_window_weak.unwrap().get_dim_background();
 
             main_window_weak.unwrap().invoke_update_config(true);
 

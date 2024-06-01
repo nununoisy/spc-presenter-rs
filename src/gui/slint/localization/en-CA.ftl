@@ -54,6 +54,7 @@ resampling-type-cubic = Cubic spline
 resampling-type-sinc = Sinc
 
 blargg-dsp-filter-checkbox-label = Use Blargg's DSP filter
+dim-background-checkbox-label = Dim background
 
 render-button-start = Render!
 render-button-cancel = Cancel

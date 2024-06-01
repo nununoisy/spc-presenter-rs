@@ -54,6 +54,7 @@ resampling-type-cubic = Spline cúbico
 resampling-type-sinc = Sinc
 
 blargg-dsp-filter-checkbox-label = Usar el filtro DSP de Blargg
+dim-background-checkbox-label = Atenuar el fondo
 
 render-button-start = ¡Renderizar!
 render-button-cancel = Cancelar

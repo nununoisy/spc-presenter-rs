@@ -111,6 +111,8 @@ resampling-type-sinc = Sinc
 
 # Label for the checkbox that enables Blargg's SNES_DSP audio filter.
 blargg-dsp-filter-checkbox-label = Use Blargg's DSP filter
+# Label for the checkbox that enables background dimming.
+dim-background-checkbox-label = Dim background
 
 # Button that starts rendering the video.
 render-button-start = Render!
