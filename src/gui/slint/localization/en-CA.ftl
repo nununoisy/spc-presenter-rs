@@ -28,6 +28,10 @@ tuning-sample-config-button-dump = Dump
 tuning-sample-config-preview-button-decrease-octave-tooltip = Decrease preview octave
 tuning-sample-config-preview-button-increase-octave-tooltip = Increase preview octave
 tuning-sample-config-pitch-type-label = Pitch:
+tuning-sample-config-unit-suffix-octave = { $n ->
+    [one] octave
+    *[other] octaves
+}
 tuning-sample-config-unit-suffix-hertz = Hz
 tuning-sample-config-addmusick-tuning-placeholder = Tuning
 tuning-sample-config-addmusick-subtuning-placeholder = Sub.

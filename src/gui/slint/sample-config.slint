@@ -18,6 +18,7 @@ export struct SampleConfig {
     name: string,
     source: int,
     pitch-type: PitchType,
+    auto-octave-offset: int,
     base-frequency: float,
     frequency: float,
     amk-tuning: int,
@@ -38,6 +39,8 @@ export component SampleConfigWidget {
     property <int> i-pitch-type-index: 0;
     property <string> i-pitch-type-string: Localization.tr("tuning-pitch-type-automatic");
     property <PitchType> i-pitch-type: PitchType.Automatic;
+    property <string> i-auto-octave-offset: "+0";
+    property <string> i-prev-auto-octave-offset: "+0";
     property <string> i-frequency: "500.0";
     property <string> i-amk-tuning: "$03";
     property <string> i-amk-subtuning: "$00";
@@ -94,6 +97,14 @@ export component SampleConfigWidget {
         }
     }
 
+    function i-change-auto-octave-offset(offset: int) {
+        if (offset >= 0) {
+            root.i-auto-octave-offset = "+" + offset;
+        } else {
+            root.i-auto-octave-offset = offset;
+        }
+    }
+
     function i-switch-selected-sample() {
         root.stop-audio();
         root.i-audio-playing = false;
@@ -109,6 +120,8 @@ export component SampleConfigWidget {
             root.i-source = root.sample-configs[root.selected-sample-index].source;
             root.i-pitch-type = root.sample-configs[root.selected-sample-index].pitch-type;
             root.i-update-pitch-type-index();
+            root.i-change-auto-octave-offset(root.sample-configs[root.selected-sample-index].auto-octave-offset);
+            root.i-prev-auto-octave-offset = root.i-auto-octave-offset;
             root.i-frequency = root.sample-configs[root.selected-sample-index].frequency;
             root.i-amk-tuning = SampleUtils.format-hex(root.sample-configs[root.selected-sample-index].amk-tuning);
             root.i-amk-subtuning = SampleUtils.format-hex(root.sample-configs[root.selected-sample-index].amk-subtuning);
@@ -222,8 +235,12 @@ export component SampleConfigWidget {
                     octaves: [root.i-piano-base-octave, root.i-piano-base-octave + 1];
                     changed(note) => {
                         if (note != -1) {
-                            root.i-change-pitch(-note);
                             if (!root.i-audio-playing && root.selected-sample-index != -1) {
+                                if (root.i-pitch-type == PitchType.Automatic) {
+                                    root.i-change-pitch(-(note - 12 * root.sample-configs[root.selected-sample-index].auto-octave-offset));
+                                } else {
+                                    root.i-change-pitch(-note);
+                                }
                                 root.i-audio-playing = root.play-audio(root.sample-configs[root.selected-sample-index]);
                             }
                         } else {
@@ -292,6 +309,29 @@ export component SampleConfigWidget {
                             root.sample-configs[root.selected-sample-index].pitch-type = root.i-pitch-type;
                         }
                     }
+                }
+
+                if root.i-pitch-type == PitchType.Automatic: LineEdit {
+                    text <=> root.i-auto-octave-offset;
+                    enabled: root.enabled;
+                    width: 100px;
+                    edited => {
+                        if (root.i-auto-octave-offset.is-float() && root.selected-sample-index != -1) {
+                            root.sample-configs[root.selected-sample-index].auto-octave-offset = root.i-auto-octave-offset.to-float();
+                            root.i-change-auto-octave-offset(root.sample-configs[root.selected-sample-index].auto-octave-offset);
+
+                            if (root.i-prev-auto-octave-offset == "") {
+                                self.set-selection-offsets(100, 100);
+                            }
+                        }
+                        root.i-prev-auto-octave-offset = root.i-auto-octave-offset;
+                    }
+                }
+                if root.i-pitch-type == PitchType.Automatic: Text {
+                    text: Localization.tr-args("tuning-sample-config-unit-suffix-octave", [
+                        Localization.int-arg("n", root.sample-configs[root.selected-sample-index].auto-octave-offset)
+                    ]);
+                    vertical-alignment: center;
                 }
 
                 if root.i-pitch-type == PitchType.Frequency: LineEdit {

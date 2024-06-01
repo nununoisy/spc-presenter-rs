@@ -20,6 +20,7 @@ pub struct SampleData {
     sample: BrrSample,
     base_pitch: f64,
     temporal_pitch: Vec<f64>,
+    temporal_pitch_octave_offset: f64,
     custom_pitch: Option<f64>,
     loudness: Vec<f64>
 }
@@ -30,6 +31,7 @@ impl Default for SampleData {
             sample: BrrSample::new(),
             base_pitch: 0.0,
             temporal_pitch: vec![],
+            temporal_pitch_octave_offset: 0.0,
             custom_pitch: None,
             loudness: vec![]
         }
@@ -108,6 +110,7 @@ impl SampleData {
             sample,
             base_pitch,
             temporal_pitch,
+            temporal_pitch_octave_offset: 0.0,
             custom_pitch: None,
             loudness
         })
@@ -121,13 +124,17 @@ impl SampleData {
         self.base_pitch
     }
 
+    pub fn temporal_pitch_octave_offset(&self) -> f64 {
+        self.temporal_pitch_octave_offset
+    }
+
     pub fn pitch_at(&self, sample_block_index: usize) -> f64 {
         if let Some(pitch) = self.custom_pitch {
             return pitch;
         }
 
         let x = sample_block_index as f64 * 16.0 / HOP_LENGTH as f64;
-        util::linear_interpolate(&self.temporal_pitch, x, self.base_pitch)
+        util::linear_interpolate(&self.temporal_pitch, x, self.base_pitch) * self.temporal_pitch_octave_offset.exp2()
     }
 
     pub fn loudness_at(&self, sample_block_index: usize) -> f64 {
@@ -137,6 +144,10 @@ impl SampleData {
 
     pub fn set_custom_tuning(&mut self, custom_pitch: Option<f64>) {
         self.custom_pitch = custom_pitch;
+    }
+
+    pub fn set_temporal_pitch_octave_offset(&mut self, offset: f64) {
+        self.temporal_pitch_octave_offset = offset;
     }
 }
 

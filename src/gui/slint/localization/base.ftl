@@ -64,6 +64,12 @@ tuning-sample-config-preview-button-decrease-octave-tooltip = Decrease preview o
 tuning-sample-config-preview-button-increase-octave-tooltip = Increase preview octave
 # Label for the combobox that selects the sample pitch type.
 tuning-sample-config-pitch-type-label = Pitch:
+# Unit suffix for octaves.
+# $n (Number) - octaves (do not include in string!)
+tuning-sample-config-unit-suffix-octave = { $n ->
+    [one] octave
+    *[other] octaves
+}
 # Unit suffix for Hertz.
 tuning-sample-config-unit-suffix-hertz = Hz
 # Placeholder text for the AddMusicK/Kankichi-kun tuning parameter (1st byte). Keep this short!

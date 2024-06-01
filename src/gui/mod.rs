@@ -614,6 +614,7 @@ pub fn run() {
                                 name: "".into(),
                                 source: *source as i32,
                                 pitch_type: PitchType::Automatic,
+                                auto_octave_offset: data.temporal_pitch_octave_offset() as i32,
                                 base_frequency: data.base_pitch() as f32,
                                 frequency: data.base_pitch() as f32,
                                 amk_tuning: 3,
@@ -890,7 +891,13 @@ pub fn run() {
                     PitchType::AddMusicK => Some(32000.0 / (16.0 * ((config.amk_tuning as f64) + (config.amk_subtuning as f64 / 256.0)))),
                     PitchType::Automatic => None
                 };
-                options.lock().unwrap().sample_tunings.get_mut(&source).unwrap().set_custom_tuning(custom_tuning);
+
+                {
+                    let mut options_guard = options.lock().unwrap();
+                    let sample_tuning = options_guard.sample_tunings.get_mut(&source).unwrap();
+                    sample_tuning.set_custom_tuning(custom_tuning);
+                    sample_tuning.set_temporal_pitch_octave_offset(config.auto_octave_offset as f64);
+                }
 
                 if config.use_color {
                     let color = {
