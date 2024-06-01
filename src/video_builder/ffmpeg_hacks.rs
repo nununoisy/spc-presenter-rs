@@ -1,7 +1,8 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, Context};
 use std::ffi::{CStr, CString};
-use ffmpeg_next::{codec, Codec, Error, format, StreamMut};
-use ffmpeg_sys_next::{av_get_sample_fmt, avcodec_alloc_context3, avcodec_parameters_from_context, avcodec_parameters_to_context, av_version_info};
+use std::mem;
+use ffmpeg_next::{codec, Codec, Error, format, frame, Rational, StreamMut};
+use ffmpeg_sys_next::{av_get_sample_fmt, avcodec_alloc_context3, avcodec_parameters_from_context, avcodec_parameters_to_context, av_version_info, AVRegionOfInterest};
 
 pub fn ffmpeg_version() -> &'static str {
     // ffmpeg-next does not provide a way to get the FFmpeg version number. It does provide the
@@ -91,4 +92,22 @@ pub fn ffmpeg_context_bytes_written(context: &format::context::Output) -> usize 
     #[cfg(feature = "ffmpeg_6_0")]
     let bytes_written = unsafe { (*(*context.as_ptr()).pb).bytes_written };
     std::cmp::max(bytes_written, 0) as usize
+}
+
+pub fn ffmpeg_frame_add_roi_side_data(frame: &mut frame::Frame, x: i32, y: i32, w: i32, h: i32) -> Result<()> {
+    const ROI_DATA_SIZE: usize = mem::size_of::<AVRegionOfInterest>();
+    let mut side_data = frame.new_side_data(frame::side_data::Type::REGIONS_OF_INTEREST, ROI_DATA_SIZE)
+        .context("Failed to create ROI side data!")?;
+
+    unsafe {
+        let roi_side_data = (*side_data.as_ptr()).data as *mut AVRegionOfInterest;
+        (*roi_side_data).self_size = ROI_DATA_SIZE as _;
+        (*roi_side_data).top = y as _;
+        (*roi_side_data).left = x as _;
+        (*roi_side_data).bottom = (y + h) as _;
+        (*roi_side_data).top = (x + w) as _;
+        (*roi_side_data).qoffset = Rational::new(-1, 1).into();
+    }
+
+    Ok(())
 }

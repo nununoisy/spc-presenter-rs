@@ -38,6 +38,7 @@ pub struct VideoBuilder {
     v_encoder: encoder::Video,
     v_swc_ctx: software::scaling::Context,
     v_sws_ctx: software::scaling::Context,
+    v_roi: Option<(i32, i32, i32, i32)>,
     v_frame_buf: VecDeque<frame::Video>,
     v_stream_idx: usize,
     v_pts: i64,
@@ -134,6 +135,7 @@ impl VideoBuilder {
             v_encoder,
             v_swc_ctx,
             v_sws_ctx,
+            v_roi: None,
             v_frame_buf: VecDeque::new(),
             v_stream_idx,
             v_pts: 0,
@@ -185,6 +187,8 @@ impl VideoBuilder {
                 context_options.set("preset", "veryfast");
                 context_options.set("crf", "20");
                 context_options.set("tune", "zerolatency");
+                context_options.set("aq-mode", "1");
+                context_options.set("aq-strength", "1.5");
             },
             _ => ()
         };

@@ -79,6 +79,10 @@ impl Renderer {
             self.viz.borrow_mut().settings_manager_mut().put_per_sample_colors(self.options.per_sample_colors.clone());
         }
 
+        let roi_w = self.options.video_options.resolution_out.0 as i32;
+        let roi_h = self.options.config.piano_roll.waveform_height as i32 + self.options.config.piano_roll.key_length as i32;
+        self.vb.set_roi_region(0, 0, roi_w, roi_h);
+
         self.vb.start_encoding()?;
         self.encode_start = Instant::now();
 

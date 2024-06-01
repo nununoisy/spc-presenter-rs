@@ -2,7 +2,7 @@ use anyhow::{Result, ensure};
 use std::iter::zip;
 use std::time::Duration;
 use ffmpeg_next::{Dictionary, frame, Packet};
-use crate::video_builder::ffmpeg_hacks::ffmpeg_context_bytes_written;
+use crate::video_builder::ffmpeg_hacks::{ffmpeg_context_bytes_written, ffmpeg_frame_add_roi_side_data};
 use super::vb_unwrap::VideoBuilderUnwrap;
 use super::VideoBuilder;
 
@@ -118,6 +118,9 @@ impl VideoBuilder {
     fn send_video_to_encoder(&mut self) -> Result<()> {
         if let Some(mut frame) = self.v_frame_buf.pop_front() {
             frame.set_pts(Some(self.v_pts));
+            if let Some((x, y, w, h)) = self.v_roi {
+                ffmpeg_frame_add_roi_side_data(&mut frame, x, y, w, h)?;
+            }
             self.v_encoder.send_frame(&frame).vb_unwrap()?;
 
             self.v_pts += 1;
@@ -171,6 +174,10 @@ impl VideoBuilder {
         } else {
             Ok(false)
         }
+    }
+
+    pub fn set_roi_region(&mut self, x: i32, y: i32, w: i32, h: i32) {
+        self.v_roi = Some((x, y, w, h));
     }
 
     pub fn start_encoding(&mut self) -> Result<()> {
