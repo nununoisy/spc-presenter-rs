@@ -376,20 +376,22 @@ impl Visualizer {
 
         if !outline {
             slices.sort_unstable_by(|(y_a, slice_a), (y_b, slice_b)| {
-                if let Some(frame_order) = slice_a.frame.partial_cmp(&slice_b.frame) {
-                    if frame_order != Ordering::Equal {
-                        // Sort: less recent -> more recent
-                        return frame_order;
-                    }
-                }
                 if let Some(width_order) = slice_a.width.partial_cmp(&slice_b.width) {
                     if width_order != Ordering::Equal {
                         // Sort: larger -> smaller
                         return width_order.reverse();
                     }
                 }
-                // Sort: higher -> lower
-                y_a.partial_cmp(y_b).unwrap_or(Ordering::Equal).reverse()
+
+                if let Some(frame_order) = slice_a.frame.partial_cmp(&slice_b.frame) {
+                    if frame_order != Ordering::Equal {
+                        // Sort: less recent -> more recent
+                        return frame_order.reverse();
+                    }
+                }
+
+                // Sort: lower -> higher
+                y_a.partial_cmp(y_b).unwrap_or(Ordering::Equal)
             });
         }
 
