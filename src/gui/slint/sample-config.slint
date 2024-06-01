@@ -272,6 +272,7 @@ export component SampleConfigWidget {
                 }
                 Button {
                     icon: self.checked ? @image-url("stop.svg") : @image-url("play.svg");
+                    colorize-icon: true;
                     checkable: true;
                     checked <=> root.i-audio-playing;
                     clicked => {
