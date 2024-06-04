@@ -154,6 +154,18 @@ export component MainWindow inherits Window {
         }
     }
 
+    property <string> i-duration-type-text: Localization.tr("render-duration-type-seconds");
+
+    public function update-duration-type-text() {
+        if (root.stop-condition-type == StopConditionType.Time) {
+            root.i-duration-type-text = Localization.tr("render-duration-type-seconds");
+        } else if (root.stop-condition-type == StopConditionType.Frames) {
+            root.i-duration-type-text = Localization.tr("render-duration-type-frames");
+        } else if (root.stop-condition-type == StopConditionType.SpcDuration) {
+            root.i-duration-type-text = Localization.tr("render-duration-type-spc");
+        }
+    }
+
     init => {
         set-resampling-type(ResamplingType.Accurate);
     }
@@ -164,6 +176,21 @@ export component MainWindow inherits Window {
     width: self.min-width;
 
     Rectangle {
+        ComboBox {
+            x: 16px;
+            y: 16px;
+            width: 100px;
+            model: Localization.languages();
+            current-value: Localization.current-language();
+
+            selected(language) => {
+                Localization.set-language(language);
+                root.set-resampling-type(resampling-type());
+                root.update-duration-type-text();
+                root.reformat-duration();
+                i-sample-config-widget.update-tr();
+            }
+        }
         ToolbarButton {
             icon: @image-url("info.svg");
             tooltip: Localization.tr("version-dialog-button-open");
@@ -399,12 +426,23 @@ export component MainWindow inherits Window {
                 dump-sample(config) => { root.dump-sample(config); }
             }
 
-            FileBrowser {
-                text: Localization.tr("background-file-browser-label");
-                enabled: !root.rendering;
-                clearable: true;
-                browse => { root.browse-for-background() }
-                cleared => { root.background-cleared(); }
+            HorizontalLayout {
+                alignment: stretch;
+                spacing: 8px;
+            
+                FileBrowser {
+                    text: Localization.tr("background-file-browser-label");
+                    enabled: !root.rendering;
+                    clearable: true;
+                    browse => { root.browse-for-background() }
+                    cleared => { root.background-cleared(); }
+                }
+                
+                CheckBox {
+                    text: Localization.tr("dim-background-checkbox-label");
+                    checked <=> root.dim-background;
+                    enabled: !root.rendering;
+                }
             }
         }
 
@@ -426,12 +464,13 @@ export component MainWindow inherits Window {
                 }
             }
             ComboBox {
-                model: [
+                model: Localization.tr-arr([
                     Localization.tr("render-duration-type-seconds"),
                     Localization.tr("render-duration-type-frames"),
                     Localization.tr("render-duration-type-spc")
-                ];
+                ]);
                 enabled: !rendering;
+                current-value <=> root.i-duration-type-text;
                 selected => {
                     if (self.current-index == 0) {
                         root.stop-condition-type = StopConditionType.Time;
@@ -440,6 +479,7 @@ export component MainWindow inherits Window {
                     } else if (self.current-index == 2) {
                         root.stop-condition-type = StopConditionType.SpcDuration;
                     }
+                    root.update-duration-type-text();
                     root.reformat-duration();
                 }
             }
@@ -516,13 +556,13 @@ export component MainWindow inherits Window {
                 vertical-alignment: center;
             }
             ComboBox {
-                model: [
+                model: Localization.tr-arr([
                     Localization.tr("resampling-type-accurate"),
                     Localization.tr("resampling-type-gaussian"),
                     Localization.tr("resampling-type-linear"),
                     Localization.tr("resampling-type-cubic"),
                     Localization.tr("resampling-type-sinc")
-                ];
+                ]);
                 enabled: !root.rendering;
                 current-index <=> root.i-resampling-type-index;
                 current-value <=> root.i-resampling-type-text;
@@ -536,12 +576,6 @@ export component MainWindow inherits Window {
             CheckBox {
                 text: Localization.tr("blargg-dsp-filter-checkbox-label");
                 checked <=> root.filter-enabled;
-                enabled: !root.rendering;
-            }
-
-            CheckBox {
-                text: Localization.tr("dim-background-checkbox-label");
-                checked <=> root.dim-background;
                 enabled: !root.rendering;
             }
         }

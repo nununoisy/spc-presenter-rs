@@ -137,6 +137,17 @@ export component SampleConfigWidget {
         }
     }
 
+    public function update-tr() {
+        if (root.selected-sample-index != -1) {
+            if (root.sample-configs[root.selected-sample-index].name != "") {
+                root.i-name = root.sample-configs[root.selected-sample-index].name;
+            } else {
+                root.i-name = Localization.tr("tuning-sample-name-placeholder");
+            }
+            root.i-update-pitch-type();
+        }
+    }
+
     HorizontalLayout {
         alignment: stretch;
         padding: 0;
@@ -297,11 +308,11 @@ export component SampleConfigWidget {
                 }
                 ComboBox {
                     enabled: root.enabled;
-                    model: [
+                    model: Localization.tr-arr([
                         Localization.tr("tuning-pitch-type-automatic"),
                         Localization.tr("tuning-pitch-type-frequency"),
                         Localization.tr("tuning-pitch-type-addmusick")
-                    ];
+                    ]);
                     current-index <=> root.i-pitch-type-index;
                     current-value <=> root.i-pitch-type-string;
                     selected => {

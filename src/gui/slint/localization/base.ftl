@@ -82,6 +82,8 @@ tuning-sample-config-per-sample-color-label = Per-sample color:
 ## Render options section
 # Label for the FileBrowser that selects a background image/video for the render.
 background-file-browser-label = Background:
+# Label for the checkbox that enables background dimming.
+dim-background-checkbox-label = Dim
 
 # Label for the settings that determine the output video duration/play time.
 render-duration-label = Render duration:
@@ -117,8 +119,6 @@ resampling-type-sinc = Sinc
 
 # Label for the checkbox that enables Blargg's SNES_DSP audio filter.
 blargg-dsp-filter-checkbox-label = Use Blargg's DSP filter
-# Label for the checkbox that enables background dimming.
-dim-background-checkbox-label = Dim background
 
 # Button that starts rendering the video.
 render-button-start = Render!

@@ -14,6 +14,35 @@ export global Localization {
         { id: id, is-int: true, s-value: "", i-value: value }
     }
 
-    pure callback tr(string) -> string;
-    pure callback tr-args(string, [LocalizationArg]) -> string;
+    pure callback languages() -> [string];
+
+    property <int> i-cache-bust: 0;
+    callback i-set-language(string);
+    pure callback i-current-language(int) -> string;
+    pure callback i-tr(int, string) -> string;
+    pure callback i-tr-args(int, string, [LocalizationArg]) -> string;
+
+    public function set-language(language: string) {
+        i-cache-bust = i-cache-bust + 1;
+        i-set-language(language);
+    }
+
+    public pure function current-language() -> string {
+        i-current-language(i-cache-bust)
+    }
+
+    public pure function tr(message-id: string) -> string {
+        i-tr(i-cache-bust, message-id)
+    }
+
+    public pure function tr-args(message-id: string, args: [LocalizationArg]) -> string {
+        i-tr-args(i-cache-bust, message-id, args)
+    }
+
+    public pure function tr-arr(messages: [string]) -> [string] {
+        if (i-cache-bust < 0) {
+            debug(i-cache-bust);
+        }
+        messages
+    }
 }

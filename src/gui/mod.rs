@@ -309,7 +309,35 @@ pub fn run() {
 
     {
         let localization_adapter = localization_adapter.clone();
-        main_window.global::<Localization>().on_tr(move |message_id| {
+        main_window.global::<Localization>().on_languages(move || {
+            let localization_adapter = localization_adapter.lock().unwrap();
+            slint_string_arr(localization_adapter.languages())
+        });
+    }
+
+    {
+        let localization_adapter = localization_adapter.clone();
+        main_window.global::<Localization>().on_i_set_language(move |language_id| {
+            let mut localization_adapter = localization_adapter.lock().unwrap();
+            localization_adapter.set_language(language_id.as_str());
+        });
+    }
+
+    {
+        let localization_adapter = localization_adapter.clone();
+        main_window.global::<Localization>().on_i_current_language(move |_| {
+            let localization_adapter = localization_adapter.lock().unwrap();
+            if let Some(language) = localization_adapter.language() {
+                language.into()
+            } else {
+                "?".into()
+            }
+        });
+    }
+
+    {
+        let localization_adapter = localization_adapter.clone();
+        main_window.global::<Localization>().on_i_tr(move |_, message_id| {
             let localization_adapter = localization_adapter.lock().unwrap();
             localization_adapter.get(message_id.as_str(), None, false).into()
         });
@@ -317,7 +345,7 @@ pub fn run() {
 
     {
         let localization_adapter = localization_adapter.clone();
-        main_window.global::<Localization>().on_tr_args(move |message_id, slint_args| {
+        main_window.global::<Localization>().on_i_tr_args(move |_, message_id, slint_args| {
             let localization_adapter = localization_adapter.lock().unwrap();
 
             let mut args = FluentArgs::new();

@@ -35,9 +35,10 @@ tuning-sample-config-unit-suffix-octave = { $n ->
 tuning-sample-config-unit-suffix-hertz = Hz
 tuning-sample-config-addmusick-tuning-placeholder = Afin.
 tuning-sample-config-addmusick-subtuning-placeholder = Sub.
-tuning-sample-config-per-sample-color-label = Color para este sample:
+tuning-sample-config-per-sample-color-label = Colorear este sample:
 
 background-file-browser-label = Fondo:
+dim-background-checkbox-label = Atenuar
 
 render-duration-label = Duración de video:
 render-duration-type-seconds = segundos
@@ -58,7 +59,6 @@ resampling-type-cubic = Spline cúbico
 resampling-type-sinc = Sinc
 
 blargg-dsp-filter-checkbox-label = Usar el filtro DSP de Blargg
-dim-background-checkbox-label = Atenuar el fondo
 
 render-button-start = ¡Renderizar!
 render-button-cancel = Cancelar

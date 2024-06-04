@@ -38,6 +38,7 @@ tuning-sample-config-addmusick-subtuning-placeholder = Sub.
 tuning-sample-config-per-sample-color-label = Per-sample color:
 
 background-file-browser-label = Background:
+dim-background-checkbox-label = Dim
 
 render-duration-label = Render duration:
 render-duration-type-seconds = seconds
@@ -58,7 +59,6 @@ resampling-type-cubic = Cubic spline
 resampling-type-sinc = Sinc
 
 blargg-dsp-filter-checkbox-label = Use Blargg's DSP filter
-dim-background-checkbox-label = Dim background
 
 render-button-start = Render!
 render-button-cancel = Cancel

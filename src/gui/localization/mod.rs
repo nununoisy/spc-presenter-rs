@@ -1,7 +1,8 @@
 mod formatter;
 mod functions;
 
-use fluent::{FluentArgs, FluentBundle, FluentResource};
+use std::str::FromStr;
+use fluent::{FluentArgs, FluentBundle, FluentMessage, FluentResource};
 use unic_langid::{langid, LanguageIdentifier};
 use formatter::fluent_formatter;
 use functions::fluent_fn_number;
@@ -33,13 +34,57 @@ impl LocalizationAdapter {
 
         Self {
             bundles: vec![
-                make_bundle!("en", "en-US"),
+                make_bundle!("en-US"),
                 make_bundle!("en-CA"),
                 make_bundle!("en-GB", "en-NZ", "en-AU", "en-IE"),
-                make_bundle!("es")
+                make_bundle!("es-ES")
             ],
             language_id
         }
+    }
+
+    fn bundle(&self, message_id: Option<&str>) -> Option<&FluentBundle<FluentResource>> {
+        // First check for an exact match
+        for bundle in self.bundles.iter() {
+            if let Some(message_id) = message_id {
+                if !bundle.has_message(message_id) {
+                    continue;
+                }
+            }
+            if bundle.locales.iter().any(|locale| &self.language_id == locale) {
+                return Some(bundle);
+            }
+        }
+
+        // Now match the language
+        for bundle in self.bundles.iter() {
+            if let Some(message_id) = message_id {
+                if !bundle.has_message(message_id) {
+                    continue;
+                }
+            }
+            if bundle.locales.iter().any(|locale| self.language_id.language == locale.language) {
+                return Some(bundle);
+            }
+        }
+
+        // No match :(
+        None
+    }
+
+    pub fn languages(&self) -> Vec<String> {
+        let mut result: Vec<String> = Vec::new();
+
+        for bundle in self.bundles.iter() {
+            result.push(bundle.locales[0].to_string());
+        }
+
+        result
+    }
+
+    pub fn language(&self) -> Option<String> {
+        self.bundle(None)
+            .map(|bundle| bundle.locales[0].to_string())
     }
 
     pub fn set_language(&mut self, language_id: &str) {
@@ -48,34 +93,16 @@ impl LocalizationAdapter {
         }
     }
 
-    pub fn bundle(&self) -> &FluentBundle<FluentResource> {
-        // First check for an exact match
-        for bundle in self.bundles.iter() {
-            if bundle.locales.iter().any(|locale| &self.language_id == locale) {
-                return bundle;
-            }
-        }
-        // Now match the language
-        for bundle in self.bundles.iter() {
-            if bundle.locales.iter().any(|locale| self.language_id.language == locale.language) {
-                return bundle;
-            }
-        }
-        // Fallback
-        self.bundles.get(0).unwrap()
-    }
-
     pub fn get(&self, message_id: &str, args: Option<&FluentArgs>, strip_fsi_pdi: bool) -> String {
-        let bundle = self.bundle();
-
-        if let Some(message) = bundle.get_message(message_id) {
+        if let Some(bundle) = self.bundle(Some(message_id)) {
+            let message = bundle.get_message(message_id).unwrap();
             if let Some(pattern) = message.value() {
                 let mut errors = Vec::new();
                 let result = bundle.format_pattern(&pattern, args, &mut errors);
-                if strip_fsi_pdi {
-                    return result.replace(&['\u{2068}', '\u{2069}'], "");
+                return if strip_fsi_pdi {
+                    result.replace(&['\u{2068}', '\u{2069}'], "")
                 } else {
-                    return result.to_string();
+                    result.to_string()
                 }
             }
         }
