@@ -3,12 +3,7 @@ pub fn multiply_volume(value: i32, volume: u8) -> i32 {
 }
 
 pub fn clamp(value: i32) -> i32 {
-    if value < -32768 {
-        return -32768;
-    } else if value > 32767 {
-        return 32767;
-    }
-    return value;
+    value.clamp(i16::MIN as _, i16::MAX as _)
 }
 
 pub fn cast_arb_int(value: i32, bits: i32) -> i32 {

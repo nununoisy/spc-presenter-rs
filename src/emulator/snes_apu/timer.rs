@@ -2,7 +2,7 @@ pub struct Timer {
     resolution: i32,
     is_running: bool,
     ticks: i32,
-    target: Option<u8>,
+    target: u8,
     counter_low: u8,
     counter_high: u8
 }
@@ -13,7 +13,7 @@ impl Timer {
             resolution: resolution,
             is_running: false,
             ticks: 0,
-            target: None,
+            target: 0,
             counter_low: 0,
             counter_high: 0
         }
@@ -28,11 +28,9 @@ impl Timer {
             self.ticks -= self.resolution;
 
             self.counter_low = self.counter_low.wrapping_add(1);
-            if let Some(target) = self.target {
-                if self.counter_low == target {
-                    self.counter_high += 1;
-                    self.counter_low = 0;
-                }
+            if self.target != 0 && self.counter_low == self.target {
+                self.counter_high += 1;
+                self.counter_low = 0;
             }
         }
     }
@@ -46,10 +44,7 @@ impl Timer {
     }
 
     pub fn set_target(&mut self, value: u8) {
-        self.target = match value {
-            0 => None,
-            x => Some(x)
-        };
+        self.target = value;
     }
 
     pub fn read_counter(&mut self) -> u8 {

@@ -100,7 +100,7 @@ pub fn ffmpeg_frame_add_roi_side_data(frame: &mut frame::Frame, x: i32, y: i32, 
         .context("Failed to create ROI side data!")?;
 
     unsafe {
-        let roi_side_data = (*side_data.as_ptr()).data as *mut AVRegionOfInterest;
+        let roi_side_data = (*side_data.as_mut_ptr()).data as *mut AVRegionOfInterest;
         (*roi_side_data).self_size = ROI_DATA_SIZE as _;
         (*roi_side_data).top = y as _;
         (*roi_side_data).left = x as _;

@@ -3,7 +3,7 @@ use super::dsp::Dsp;
 use super::super::apu::Apu;
 use super::envelope::Envelope;
 use super::dsp_helpers;
-use super::interpolation_tables::{GAUSSIAN_KERNEL, GAUSSIAN_KERNEL_SIZE, ACCURATE_GAUSSIAN_KERNEL, ACCURATE_GAUSSIAN_KERNEL_SIZE, SINC_KERNEL, CUBIC_SPLINE_KERNEL};
+use super::interpolation_tables::{interp_dot, ACCURATE_GAUSSIAN_KERNEL, GAUSSIAN_KERNEL, CUBIC_SPLINE_KERNEL, SINC_KERNEL};
 
 const RESAMPLE_BUFFER_LEN: usize = 12;
 
@@ -91,7 +91,7 @@ pub struct Voice {
     kon_delay: u8,
 
     pub resampling_mode: ResamplingMode,
-    resample_buffer: [i32; RESAMPLE_BUFFER_LEN],
+    resample_buffer: [i32; 2 * RESAMPLE_BUFFER_LEN],
     resample_buffer_pos: usize,
 
     pub output_buffer: VoiceBuffer,
@@ -137,7 +137,7 @@ impl Voice {
             kon_delay: 0,
 
             resampling_mode,
-            resample_buffer: [0; RESAMPLE_BUFFER_LEN],
+            resample_buffer: [0; 2 * RESAMPLE_BUFFER_LEN],
             resample_buffer_pos: 0,
 
             output_buffer: VoiceBuffer::new(),
@@ -208,70 +208,35 @@ impl Voice {
         };
 
         let mut sample = if !self.noise_on {
-            let base_pos = self.resample_buffer_pos + (self.sample_pos >> 12) as usize;
-
-            let s1 = self.resample_buffer[base_pos % RESAMPLE_BUFFER_LEN];
-            let s2 = self.resample_buffer[(base_pos + 1) % RESAMPLE_BUFFER_LEN];
-            let s3 = self.resample_buffer[(base_pos + 2) % RESAMPLE_BUFFER_LEN];
-            let s4 = self.resample_buffer[(base_pos + 3) % RESAMPLE_BUFFER_LEN];
-
+            let base_pos = (self.resample_buffer_pos + (self.sample_pos >> 12) as usize) % RESAMPLE_BUFFER_LEN;
             let resampled = match self.resampling_mode {
                 ResamplingMode::Linear => {
-                    let p1 = self.sample_pos & 0xFFF;
+                    let p1 = (self.sample_pos & 0xFFF) as i16;
                     let p2 = 0x1000 - p1;
-
-                    (s1 * p1 + s2 * p2) >> 12
+                    interp_dot(&self.resample_buffer[base_pos..(base_pos + 2)], &[p1, p2]) >> 12
                 },
                 ResamplingMode::Gaussian => {
-                    let kernel_index = ((self.sample_pos & 0xFFF) >> 2) as usize;
-                    let p1 = GAUSSIAN_KERNEL[GAUSSIAN_KERNEL_SIZE - 1 - (kernel_index + GAUSSIAN_KERNEL_SIZE / 2)] as i32;
-                    let p2 = GAUSSIAN_KERNEL[GAUSSIAN_KERNEL_SIZE - 1 - kernel_index] as i32;
-                    let p3 = GAUSSIAN_KERNEL[kernel_index + GAUSSIAN_KERNEL_SIZE / 2] as i32;
-                    let p4 = GAUSSIAN_KERNEL[kernel_index] as i32;
-
-                    (s1 * p1 + s2 * p2 + s3 * p3 + s4 * p4) >> 11
+                    let kernel_index = (self.sample_pos & 0xFFC) as usize;
+                    interp_dot(&self.resample_buffer[base_pos..(base_pos + 4)], &GAUSSIAN_KERNEL[kernel_index..(kernel_index + 4)]) >> 11
                 },
                 ResamplingMode::Cubic => {
-                    let table_index = ((self.sample_pos & 0xFF0) >> 2) as usize;
-                    let p1 = CUBIC_SPLINE_KERNEL[table_index] as i32;
-                    let p2 = CUBIC_SPLINE_KERNEL[table_index + 1] as i32;
-                    let p3 = CUBIC_SPLINE_KERNEL[table_index + 2] as i32;
-                    let p4 = CUBIC_SPLINE_KERNEL[table_index + 3] as i32;
-
-                    (s1 * p1 + s2 * p2 + s3 * p3 + s4 * p4) >> 15
+                    let kernel_index = ((self.sample_pos & 0xFF0) >> 2) as usize;
+                    interp_dot(&self.resample_buffer[base_pos..(base_pos + 4)], &CUBIC_SPLINE_KERNEL[kernel_index..(kernel_index + 4)]) >> 15
                 },
                 ResamplingMode::Sinc => {
-                    let table_index = ((self.sample_pos & 0xFF0) >> 1) as usize;
-
-                    let s5 = self.resample_buffer[(base_pos + 4) % RESAMPLE_BUFFER_LEN];
-                    let s6 = self.resample_buffer[(base_pos + 5) % RESAMPLE_BUFFER_LEN];
-                    let s7 = self.resample_buffer[(base_pos + 6) % RESAMPLE_BUFFER_LEN];
-                    let s8 = self.resample_buffer[(base_pos + 7) % RESAMPLE_BUFFER_LEN];
-
-                    let p1 = SINC_KERNEL[table_index] as i32;
-                    let p2 = SINC_KERNEL[table_index + 1] as i32;
-                    let p3 = SINC_KERNEL[table_index + 2] as i32;
-                    let p4 = SINC_KERNEL[table_index + 3] as i32;
-                    let p5 = SINC_KERNEL[table_index + 4] as i32;
-                    let p6 = SINC_KERNEL[table_index + 5] as i32;
-                    let p7 = SINC_KERNEL[table_index + 6] as i32;
-                    let p8 = SINC_KERNEL[table_index + 7] as i32;
-
-                    (s1 * p1 + s2 * p2 + s3 * p3 + s4 * p4 + s5 * p5 + s6 * p6 + s7 * p7 + s8 * p8) >> 15
+                    let kernel_index = ((self.sample_pos & 0xFF0) >> 1) as usize;
+                    interp_dot(&self.resample_buffer[base_pos..(base_pos + 8)], &SINC_KERNEL[kernel_index..(kernel_index + 8)]) >> 15
                 },
                 ResamplingMode::Accurate => {
-                    let kernel_index = ((self.sample_pos & 0xFFF) >> 4) as usize;
-                    let p1 = ACCURATE_GAUSSIAN_KERNEL[ACCURATE_GAUSSIAN_KERNEL_SIZE - 1 - (kernel_index + ACCURATE_GAUSSIAN_KERNEL_SIZE / 2)] as i32;
-                    let p2 = ACCURATE_GAUSSIAN_KERNEL[ACCURATE_GAUSSIAN_KERNEL_SIZE - 1 - kernel_index] as i32;
-                    let p3 = ACCURATE_GAUSSIAN_KERNEL[kernel_index + ACCURATE_GAUSSIAN_KERNEL_SIZE / 2] as i32;
-                    let p4 = ACCURATE_GAUSSIAN_KERNEL[kernel_index] as i32;
-
-                    let c1 = (s1 * p1) >> 11;
-                    let c2 = (s2 * p2) >> 11;
-                    let c3 = (s3 * p3) >> 11;
-                    let c4 = (s4 * p4) >> 11;
-
-                    ((((c1 + c2 + c3) & 0xFFFF) as i16) as i32) + c4
+                    let kernel_index = ((self.sample_pos & 0xFF0) >> 2) as usize;
+                    let mut sum = 0;
+                    for i in 0..4 {
+                        sum += (self.resample_buffer[base_pos + i] * ACCURATE_GAUSSIAN_KERNEL[kernel_index + i] as i32) >> 11;
+                        if i == 2 {
+                            sum = ((sum & 0xFFFF) as i16) as i32;
+                        }
+                    }
+                    sum
                 }
             };
             dsp_helpers::clamp(resampled) & !1
@@ -385,7 +350,9 @@ impl Voice {
         self.brr_decoder.read(&buf);
 
         for _ in 0..4 {
-            self.resample_buffer[self.resample_buffer_pos] = self.brr_decoder.read_next_sample() as i32;
+            let next_sample = self.brr_decoder.read_next_sample() as i32;
+            self.resample_buffer[self.resample_buffer_pos] = next_sample;
+            self.resample_buffer[self.resample_buffer_pos + RESAMPLE_BUFFER_LEN] = next_sample;
             self.resample_buffer_pos = (self.resample_buffer_pos + 1) % RESAMPLE_BUFFER_LEN;
         }
     }
