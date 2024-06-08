@@ -10,7 +10,7 @@ use channel_settings::{ChannelSettingsManager, ChannelSettings};
 use filters::HighPassIIR;
 use oscilloscope::OscilloscopeState;
 use piano_roll::PianoRollState;
-use crate::emulator::ApuStateReceiver;
+use snes_apu_spcp::{ApuState, ApuStateReceiver};
 use tile_map::TileMap;
 use crate::config::PianoRollConfig;
 use crate::sample_processing::SampleData;
@@ -118,39 +118,26 @@ impl Visualizer {
 }
 
 impl ApuStateReceiver for Visualizer {
-    fn receive(
-        &mut self,
-        channel: usize,
-        source: u8,
-        muted: bool,
-        envelope_level: i32,
-        volume: (i8, i8),
-        amplitude: (i32, i32),
-        pitch: u16,
-        noise_clock: Option<u8>,
-        edge: bool,
-        kon_frames: usize,
-        sample_block_index: usize
-    ) {
-        if !self.sample_data.contains_key(&source) {
-            self.sample_data.insert(source, SampleData::default());
+    fn receive(&mut self, channel: usize, state: ApuState) {
+        if !self.sample_data.contains_key(&state.source) {
+            self.sample_data.insert(state.source, SampleData::default());
         }
 
-        let sample_data = self.sample_data.get(&source).unwrap();
-        let source_pitch = sample_data.pitch_at(sample_block_index);
-        let source_loudness = match noise_clock {
+        let sample_data = self.sample_data.get(&state.source).unwrap();
+        let source_pitch = sample_data.pitch_at(state.sample_block_index);
+        let source_loudness = match state.noise_clock {
             Some(_) => 1.0,
-            None => sample_data.loudness_at(sample_block_index)
+            None => sample_data.loudness_at(state.sample_block_index)
         };
         
-        let (l_volume, r_volume) = volume;
-        let (l_amplitude, r_amplitude) = amplitude;
+        let (l_volume, r_volume) = state.volume;
+        let (l_amplitude, r_amplitude) = state.amplitude;
         
-        let volume = if muted {
+        let volume = if state.muted {
             0.0
         } else {
             let mean_volume = (l_volume as f32 / 2.0).abs() + (r_volume as f32 / 2.0).abs();
-            (source_loudness as f32 * 2.8 * (mean_volume / 3.0 + 1.0).log2() * (envelope_level as f32 / 2047.0)).ceil()
+            (source_loudness as f32 * 2.8 * (mean_volume / 3.0 + 1.0).log2() * (state.envelope_level as f32 / 2047.0)).ceil()
         };
 
         let amplitude_pre = {
@@ -163,9 +150,9 @@ impl ApuStateReceiver for Visualizer {
             }
         };
 
-        let frequency = match noise_clock {
+        let frequency = match state.noise_clock {
             Some(t) => C_0 * (t as f64 / 12.0).exp2(),
-            None => source_pitch * pitch as f64 / 0x1000 as f64
+            None => source_pitch * state.pitch as f64 / 0x1000 as f64
         }.max(f64::EPSILON);
 
         let balance = ((l_volume as f64).abs() / -128.0) + ((r_volume as f64).abs() / 128.0) + 0.5;
@@ -180,10 +167,10 @@ impl ApuStateReceiver for Visualizer {
             volume,
             amplitude: filter.output(),
             frequency,
-            timbre: source as usize % timbre_max,
+            timbre: state.source as usize % timbre_max,
             balance,
-            edge,
-            kon_frames
+            edge: state.edge,
+            kon_frames: state.kon_frames
         };
 
         self.oscilloscope_states[channel].consume(&state, settings);

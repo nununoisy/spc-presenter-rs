@@ -1,12 +1,10 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use crate::emulator::ApuStateReceiver;
-use super::super::apu::Apu;
+use std::sync::{Arc, Mutex};
+use crate::apu::{Apu, ApuState, ApuStateReceiver};
 use super::voice::{Voice, ResamplingMode};
 use super::filter::Filter;
 use super::ring_buffer::RingBuffer;
-use super::super::spc::spc::{Spc, REG_LEN};
 use super::dsp_helpers;
+use spc_spcp::spc::{Spc, REG_LEN};
 
 pub const SAMPLE_RATE: usize = 32000;
 pub const BUFFER_LEN: usize = SAMPLE_RATE * 2;
@@ -55,12 +53,11 @@ pub struct Dsp {
 
     resampling_mode: ResamplingMode,
 
-    pub state_receiver: Option<Rc<RefCell<dyn ApuStateReceiver>>>
+    pub state_receiver: Option<Arc<Mutex<dyn ApuStateReceiver>>>
 }
 
 impl Dsp {
     pub fn new(emulator: *mut Apu) -> Box<Dsp> {
-        let resampling_mode = ResamplingMode::Accurate;
         let mut ret = Box::new(Dsp {
             emulator,
 
@@ -91,13 +88,13 @@ impl Dsp {
             echo_pos: 0,
             echo_length: 0,
 
-            resampling_mode,
+            resampling_mode: ResamplingMode::Accurate,
 
             state_receiver: None
         });
         let ret_ptr = &mut *ret as *mut _;
         for _ in 0..NUM_VOICES {
-            ret.voices.push(Box::new(Voice::new(ret_ptr, emulator, resampling_mode)));
+            ret.voices.push(Box::new(Voice::new(ret_ptr, emulator, ResamplingMode::Accurate)));
         }
         ret.set_filter_coefficient(0x00, 0x80);
         ret.set_filter_coefficient(0x01, 0xff);
@@ -241,22 +238,25 @@ impl Dsp {
                     let voice = self.voices.get_mut(channel).unwrap();
                     let last_sample = voice.output_buffer.read();
 
-                    let source = voice.source;
-                    let muted = voice.is_muted;
-                    let envelope_level = voice.envelope.level;
-                    let volume = (voice.vol_left as i8, voice.vol_right as i8);
-                    let amplitude = (last_sample.left_out, last_sample.right_out);
-                    let pitch = voice.pitch();
-                    let noise_clock = voice.noise_on.then_some(self.noise_clock);
-                    let edge = voice.edge_detected();
-                    let kon_frames = voice.get_sample_frame();
-                    let sample_block_index = voice.sample_block_index;
+                    let state = ApuState {
+                        source:voice.source,
+                        muted:voice.is_muted,
+                        envelope_level:voice.envelope.level,
+                        volume:(voice.vol_left as i8, voice.vol_right as i8),
+                        amplitude:(last_sample.left_out, last_sample.right_out),
+                        pitch:voice.pitch(),
+                        noise_clock:voice.noise_on.then_some( self.noise_clock),
+                        edge:voice.edge_detected(),
+                        kon_frames:voice.get_sample_frame(),
+                        sample_block_index:voice.sample_block_index
+                    };
 
                     self.state_receiver
-                        .clone()
+                        .as_ref()
                         .unwrap()
-                        .borrow_mut()
-                        .receive(channel, source, muted, envelope_level, volume, amplitude, pitch, noise_clock, edge, kon_frames, sample_block_index);
+                        .lock()
+                        .unwrap()
+                        .receive(channel, state);
                 }
             }
         }
@@ -287,7 +287,8 @@ impl Dsp {
                     0x05 => { voice.envelope.l_adsr0 = value; },
                     0x06 => { voice.envelope.adsr1 = value; },
                     0x07 => { voice.envelope.gain = value; },
-                    _ => () // Do nothing
+
+                    _ => ()
                 }
             }
         } else if voice_address == 0x0f {
@@ -312,7 +313,7 @@ impl Dsp {
                 0x6d => { self.echo_start_address = (value as u16) << 8; },
                 0x7d => { self.echo_delay = value & 0x0f; self.echo_length = self.calculate_echo_length(); },
 
-                _ => () // Do nothing
+                _ => ()
             }
         }
     }
@@ -337,6 +338,7 @@ impl Dsp {
                 0x07 => voice.envelope.gain,
                 0x08 => voice.envx_value,
                 0x09 => voice.outx_value,
+
                 _ => unreachable!()
             }
         } else if voice_address == 0x0f {

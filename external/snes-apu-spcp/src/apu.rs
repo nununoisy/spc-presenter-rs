@@ -1,7 +1,27 @@
-use super::smp::Smp;
-use super::dsp::dsp::Dsp;
-use super::timer::Timer;
-use super::spc::spc::{Spc, RAM_LEN, IPL_ROM_LEN};
+use std::sync::{Arc, Mutex};
+use crate::smp::Smp;
+use crate::timer::Timer;
+use crate::dsp::dsp::Dsp;
+use spc_spcp::spc::{Spc, RAM_LEN, IPL_ROM_LEN};
+use crate::ResamplingMode;
+
+#[derive(Copy, Clone)]
+pub struct ApuState {
+    pub source: u8,
+    pub muted: bool,
+    pub envelope_level: i32,
+    pub volume: (i8, i8),
+    pub amplitude: (i32, i32),
+    pub pitch: u16,
+    pub noise_clock: Option<u8>,
+    pub edge: bool,
+    pub kon_frames: usize,
+    pub sample_block_index: usize
+}
+
+pub trait ApuStateReceiver {
+    fn receive(&mut self, channel: usize, state: ApuState);
+}
 
 static DEFAULT_IPL_ROM: [u8; IPL_ROM_LEN] = [
     0xcd, 0xef, 0xbd, 0xe8, 0x00, 0xc6, 0x1d, 0xd0,
@@ -18,8 +38,8 @@ pub struct Apu {
     ram: Box<[u8]>,
     ipl_rom: Box<[u8]>,
 
-    pub smp: Option<Box<Smp>>,
-    pub dsp: Option<Box<Dsp>>,
+    pub(crate) smp: Option<Box<Smp>>,
+    pub(crate) dsp: Option<Box<Dsp>>,
 
     timers: [Timer; 3],
 
@@ -192,5 +212,19 @@ impl Apu {
         self.timers[0].set_start_stop_bit((value & 0x01) != 0);
         self.timers[1].set_start_stop_bit((value & 0x02) != 0);
         self.timers[2].set_start_stop_bit((value & 0x04) != 0);
+    }
+
+    pub fn set_resampling_mode(&mut self, resampling_mode: ResamplingMode) {
+        self.dsp.as_mut().unwrap().set_resampling_mode(resampling_mode);
+    }
+
+    pub fn set_state_receiver(&mut self, state_receiver: Option<Arc<Mutex<dyn ApuStateReceiver>>>) {
+        self.dsp.as_mut().unwrap().state_receiver = state_receiver;
+    }
+
+    pub fn read_sample_directory(&mut self, source: u8) -> (u32, u32) {
+        let sample_address = self.dsp.as_mut().unwrap().read_source_dir_start_address(source as i32);
+        let loop_address = self.dsp.as_mut().unwrap().read_source_dir_loop_address(source as i32);
+        (sample_address, loop_address)
     }
 }

@@ -1151,7 +1151,9 @@ impl Smp {
                     0xfc => adjust!(inc, self.reg_y),
                     0xfd => transfer!(self.reg_a, self.reg_y, false),
                     0xfe => self.bne_y_dec(),
-                    0xff => self.sleep_stop()
+                    0xff => self.sleep_stop(),
+
+                    _ => unreachable!()
                 }
             } else {
                 self.cycles(2);

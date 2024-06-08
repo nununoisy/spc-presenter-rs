@@ -1,6 +1,3 @@
-use multiversion::multiversion;
-
-#[multiversion(targets = "simd")]
 pub fn interp_dot(s: &[i32], p: &[i16]) -> i32 {
     s.iter().zip(p.iter()).fold(0, |c, (s, p)| c + *s * (*p as i32))
 }

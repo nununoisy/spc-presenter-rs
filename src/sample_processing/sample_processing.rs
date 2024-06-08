@@ -1,11 +1,11 @@
-use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
-use std::rc::Rc;
 use std::thread;
 use std::time::Duration;
 use anyhow::{Result, anyhow};
-use crate::emulator::{ApuStateReceiver, Emulator, BrrSample};
+use snes_apu_spcp::{ApuState, ApuStateReceiver};
+use crate::emulator::{Emulator, BrrSample};
 use super::{sample_loudness, util, Yin};
 
 const F_MIN: f64 = 62.5;
@@ -172,31 +172,18 @@ impl SampleDetector {
 }
 
 impl ApuStateReceiver for SampleDetector {
-    fn receive(
-        &mut self,
-        _channel: usize,
-        source: u8,
-        muted: bool,
-        _envelope_level: i32,
-        volume: (i8, i8),
-        amplitude: (i32, i32),
-        _pitch: u16,
-        _noise_clock: Option<u8>,
-        _edge: bool,
-        _kon_frames: usize,
-        sample_block_index: usize
-    ) {
-        if muted || (volume.0 == 0 && volume.1 == 0 && amplitude.0 == 0 && amplitude.1 == 0) {
+    fn receive(&mut self, _channel: usize, state: ApuState) {
+        if state.muted || (state.volume.0 == 0 && state.volume.1 == 0 && state.amplitude.0 == 0 && state.amplitude.1 == 0) {
             return;
         }
 
-        self.0.entry(source)
+        self.0.entry(state.source)
             .and_modify(|last_block_index| {
-                if *last_block_index < sample_block_index + 1 {
-                    *last_block_index = sample_block_index + 1;
+                if *last_block_index < state.sample_block_index + 1 {
+                    *last_block_index = state.sample_block_index + 1;
                 }
             })
-            .or_insert(sample_block_index + 1);
+            .or_insert(state.sample_block_index + 1);
     }
 }
 
@@ -206,7 +193,7 @@ pub struct SampleProcessor {
     current_frame: usize,
     current_sample: usize,
     sample_data: HashMap<u8, SampleData>,
-    sample_detector: Rc<RefCell<SampleDetector>>,
+    sample_detector: Arc<Mutex<SampleDetector>>,
     detected_sources: HashMap<u8, usize>,
     processing_queue: VecDeque<(u8, BrrSample)>
 }
@@ -221,7 +208,8 @@ impl SampleProcessor {
             None => 300 * 60
         };
 
-        let sample_detector = Rc::new(RefCell::new(SampleDetector::new()));
+        let sample_detector = Arc::new(Mutex::new(SampleDetector::new()));
+        emulator.set_filter_enabled(false);
         emulator.set_state_receiver(Some(sample_detector.clone()));
 
         Ok(Self {
@@ -264,7 +252,8 @@ impl SampleProcessor {
             self.emulator.step()?;
             self.current_frame += 1;
 
-            for (source, max_length) in self.sample_detector.borrow_mut().sources() {
+            let mut sample_detector = self.sample_detector.lock().unwrap();
+            for (source, max_length) in sample_detector.sources() {
                 if let Some(last_max_length) = self.detected_sources.get_mut(&source) {
                     if *last_max_length < max_length {
                         *last_max_length = max_length;
@@ -277,6 +266,7 @@ impl SampleProcessor {
                 self.processing_queue.push_back((source, sample));
                 self.detected_sources.insert(source, max_length);
             }
+            drop(sample_detector);
 
             if self.current_frame >= self.total_frames {
                 thread::sleep(Duration::from_millis(500));

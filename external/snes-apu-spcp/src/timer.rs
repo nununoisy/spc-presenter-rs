@@ -10,7 +10,7 @@ pub struct Timer {
 impl Timer {
     pub fn new(resolution: i32) -> Timer {
         Timer {
-            resolution: resolution,
+            resolution,
             is_running: false,
             ticks: 0,
             target: 0,

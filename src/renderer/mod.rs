@@ -1,8 +1,7 @@
 pub mod render_options;
 
 use anyhow::{Result};
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use ringbuf::{HeapRb, Rb};
 use ringbuf::ring_buffer::RbBase;
@@ -16,7 +15,7 @@ use crate::visualizer::Visualizer;
 pub struct Renderer {
     options: RendererOptions,
     emulator: Emulator,
-    viz: Rc<RefCell<Visualizer>>,
+    viz: Arc<Mutex<Visualizer>>,
     vb: VideoBuilder,
 
     cur_frame: u64,
@@ -32,7 +31,7 @@ pub struct Renderer {
 impl Renderer {
     pub fn new(options: RendererOptions) -> Result<Self> {
         let emulator = Emulator::from_spc(options.input_path.clone(), options.video_options.sample_rate as u32)?;
-        let viz = Rc::new(RefCell::new(Visualizer::new(
+        let viz = Arc::new(Mutex::new(Visualizer::new(
             8,
             options.video_options.resolution_in.0,
             options.video_options.resolution_in.1,
@@ -76,7 +75,7 @@ impl Renderer {
         self.emulator.set_frame_delay(6);
 
         if !self.options.per_sample_colors.is_empty() {
-            self.viz.borrow_mut().settings_manager_mut().put_per_sample_colors(self.options.per_sample_colors.clone());
+            self.viz.lock().unwrap().settings_manager_mut().put_per_sample_colors(self.options.per_sample_colors.clone());
         }
 
         let roi_w = self.options.video_options.resolution_out.0 as i32;
@@ -92,9 +91,12 @@ impl Renderer {
     pub fn step(&mut self) -> Result<bool> {
         self.emulator.step()?;
 
-        self.viz.borrow_mut().draw();
+        {
+            let mut viz = self.viz.lock().unwrap();
+            viz.draw();
+            self.vb.push_video_data(viz.get_canvas_buffer())?;
+        }
 
-        self.vb.push_video_data(&self.viz.borrow().get_canvas_buffer())?;
         if let Some(audio) = self.emulator.get_audio_samples(Some(self.vb.audio_frame_size())) {
             let adjusted_audio = match self.fadeout_timer {
                 Some(t) => {
@@ -124,17 +126,6 @@ impl Renderer {
         }
 
         self.cur_frame += 1;
-
-        // if let Some(current_position) = self.song_position() {
-        //     if current_position.row < self.last_position.row {
-        //         self.loop_count += 1;
-        //         if self.loop_duration.is_none() {
-        //             self.loop_duration = Some(self.cur_frame);
-        //         }
-        //     }
-        //     self.last_position = current_position;
-        // }
-
         Ok(true)
     }
 

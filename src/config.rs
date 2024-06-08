@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use tiny_skia::Color;
 use csscolorparser::Color as CssColor;
-use crate::emulator::ResamplingMode;
+use snes_apu_spcp::ResamplingMode;
 use crate::visualizer::channel_settings::ChannelSettingsManager;
 
 fn serialize_color<S: Serializer>(color: &Color, serializer: S) -> Result<S::Ok, S::Error> {

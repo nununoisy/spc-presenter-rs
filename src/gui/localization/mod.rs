@@ -1,8 +1,7 @@
 mod formatter;
 mod functions;
 
-use std::str::FromStr;
-use fluent::{FluentArgs, FluentBundle, FluentMessage, FluentResource};
+use fluent::{FluentArgs, FluentBundle, FluentResource};
 use unic_langid::{langid, LanguageIdentifier};
 use formatter::fluent_formatter;
 use functions::fluent_fn_number;

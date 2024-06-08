@@ -4196,6 +4196,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "snes-apu-spcp"
+version = "0.2.0"
+dependencies = [
+ "spc-spcp",
+]
+
+[[package]]
 name = "socket2"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4236,13 +4243,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spc"
-version = "0.1.1"
-dependencies = [
- "encoding_rs",
-]
-
-[[package]]
 name = "spc-presenter-rs"
 version = "0.2.0"
 dependencies = [
@@ -4267,12 +4267,20 @@ dependencies = [
  "serde_json",
  "slint",
  "slint-build",
- "spc",
+ "snes-apu-spcp",
+ "spc-spcp",
  "sys-locale",
  "tiny-skia",
  "toml 0.8.8",
  "unic-langid",
  "winres",
+]
+
+[[package]]
+name = "spc-spcp"
+version = "0.2.0"
+dependencies = [
+ "encoding_rs",
 ]
 
 [[package]]

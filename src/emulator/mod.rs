@@ -1,35 +1,14 @@
-mod snes_apu;
 mod resampler;
 mod filter;
 mod brr_sample;
 
 use anyhow::Result;
-use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
 use std::path::Path;
-use std::rc::Rc;
-use spc::spc::Spc;
-use snes_apu::apu::Apu;
-pub use snes_apu::dsp::voice::ResamplingMode;
-pub use brr_sample::BrrSample;
-use crate::emulator::brr_sample::BrrSampleBuilder;
-
-pub trait ApuStateReceiver {
-    fn receive(
-        &mut self,
-        channel: usize,
-        source: u8,
-        muted: bool,
-        envelope_level: i32,
-        volume: (i8, i8),
-        amplitude: (i32, i32),
-        pitch: u16,
-        noise_clock: Option<u8>,
-        edge: bool,
-        kon_frames: usize,
-        sample_block_index: usize
-    );
-}
+use spc_spcp::spc::Spc;
+use snes_apu_spcp::{Apu, ApuStateReceiver, ResamplingMode};
+pub use brr_sample::{BrrSample, BrrSampleBuilder};
 
 pub struct SpcMetadata {
     pub title: String,
@@ -83,7 +62,7 @@ impl Emulator {
 
         let mut combined_sample_buffer = self.resampler.run(&l_sample_buffer, &r_sample_buffer)?;
         if self.filter_enabled {
-            self.filter.run(&mut combined_sample_buffer)?;
+            self.filter.run(&mut combined_sample_buffer);
         }
         self.sample_buffer.extend(combined_sample_buffer.iter());
 
@@ -109,8 +88,8 @@ impl Emulator {
         }
     }
 
-    pub fn set_state_receiver(&mut self, state_receiver: Option<Rc<RefCell<dyn ApuStateReceiver>>>) {
-        self.apu.dsp.as_mut().unwrap().state_receiver = state_receiver;
+    pub fn set_state_receiver(&mut self, state_receiver: Option<Arc<Mutex<dyn ApuStateReceiver>>>) {
+        self.apu.set_state_receiver(state_receiver);
     }
 
     pub fn set_frame_delay(&mut self, frame_delay: usize) {
@@ -118,7 +97,7 @@ impl Emulator {
     }
 
     pub fn set_resampling_mode(&mut self, resampling_mode: ResamplingMode) {
-        self.apu.dsp.as_mut().unwrap().set_resampling_mode(resampling_mode);
+        self.apu.set_resampling_mode(resampling_mode);
     }
 
     pub fn set_filter_enabled(&mut self, filter_enabled: bool) {
@@ -148,8 +127,7 @@ impl Emulator {
     pub fn dump_sample(&mut self, source: u8) -> BrrSample {
         let mut result = BrrSampleBuilder::new();
 
-        let mut sample_address = self.apu.dsp.as_mut().unwrap().read_source_dir_start_address(source as i32);
-        let loop_address = self.apu.dsp.as_mut().unwrap().read_source_dir_loop_address(source as i32);
+        let (mut sample_address, loop_address) = self.apu.read_sample_directory(source);
         println!("Dumping sample ${:x}, start=${:04x}, loop=${:04x}", source, sample_address, loop_address);
         let mut did_loop = false;
         let mut buf = [0u8; 9];

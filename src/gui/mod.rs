@@ -18,8 +18,8 @@ use sample_processing_thread::{SampleProcessingThreadMessage, SampleProcessingTh
 use audio_previewer::{AudioPreviewer, audio_stopped_timer};
 use localization::{LocalizationAdapter, fluent_args};
 use fluent::FluentArgs;
+use snes_apu_spcp::ResamplingMode;
 use crate::config::Config;
-use crate::emulator::ResamplingMode;
 use crate::renderer::render_options::{RendererOptions, StopCondition};
 use crate::sample_processing::SampleProcessorProgress;
 use crate::tuning;
@@ -207,7 +207,7 @@ fn parse_hex(s: slint::SharedString) -> Option<u16> {
 }
 
 fn get_spc_metadata<P: AsRef<Path>>(spc_path: P) -> Result<(Option<Duration>, slint::ModelRc<slint::SharedString>)> {
-    let spc_file = spc::spc::Spc::load(spc_path)?;
+    let spc_file = spc_spcp::spc::Spc::load(spc_path)?;
 
     let (duration, lines) = match spc_file.id666_tag {
         Some(metadata) => (

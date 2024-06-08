@@ -1,0 +1,13 @@
+[package]
+name = "snes-apu-spcp"
+version = "0.2.0"
+edition = "2021"
+authors = ["nununoisy <noah.sweilem@gmail.com>", "ferris <jake@fusetools.com>"]
+description = "Fork of the emu-rs Super Nintendo audio unit emulator."
+homepage = "https://github.com/nununoisy/spc-presenter-rs"
+repository = "https://github.com/nununoisy/spc-presenter-rs"
+keywords = ["spc", "snes", "super", "nintendo", "music"]
+license = "BSD-2-Clause"
+
+[dependencies]
+spc-spcp = { path = "../spc-spcp" }

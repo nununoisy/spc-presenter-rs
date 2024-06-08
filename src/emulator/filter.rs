@@ -1,5 +1,3 @@
-use anyhow::{Result, ensure};
-
 pub const GAIN_UNIT: i32 = 0x100;
 const GAIN_BITS: u8 = 8;
 
@@ -49,8 +47,8 @@ impl BlarggSpcFilter {
         self.bass = bass;
     }
 
-    pub fn run(&mut self, io: &mut [i16]) -> Result<()> {
-        ensure!(io.len() % 2 == 0, "Filter input length must be even");
+    pub fn run(&mut self, io: &mut [i16]) {
+        debug_assert_eq!(io.len() % 2, 0, "Filter input length must be even");
 
         for (i, c) in self.ch.iter_mut().enumerate() {
             let mut sum = c.sum;
@@ -78,8 +76,6 @@ impl BlarggSpcFilter {
             c.pp1 = pp1;
             c.p1 = p1;
         }
-
-        Ok(())
     }
 }
 
