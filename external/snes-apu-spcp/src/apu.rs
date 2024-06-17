@@ -1,12 +1,15 @@
+use std::io;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use crate::smp::Smp;
 use crate::timer::Timer;
 use crate::dsp::dsp::Dsp;
+use crate::script700::runtime::Runtime;
 use spc_spcp::spc::{Spc, RAM_LEN, IPL_ROM_LEN};
 use crate::ResamplingMode;
 
-#[derive(Copy, Clone)]
-pub struct ApuState {
+#[derive(Copy, Clone, Default, Debug)]
+pub struct ApuChannelState {
     pub source: u8,
     pub muted: bool,
     pub envelope_level: i32,
@@ -16,11 +19,23 @@ pub struct ApuState {
     pub noise_clock: Option<u8>,
     pub edge: bool,
     pub kon_frames: usize,
-    pub sample_block_index: usize
+    pub sample_block_index: usize,
+    pub echo_delay: Option<u8>,
+    pub pitch_modulation: bool
+}
+
+#[derive(Copy, Clone, Default, Debug)]
+pub struct ApuMasterState {
+    pub master_volume: (i8, i8),
+    pub echo_volume: (i8, i8),
+    pub echo_delay: u8,
+    pub echo_feedback: i8,
+    pub amplitude: (i32, i32)
 }
 
 pub trait ApuStateReceiver {
-    fn receive(&mut self, channel: usize, state: ApuState);
+    fn receive(&mut self, channel: usize, state: ApuChannelState);
+    fn receive_master(&mut self, state: ApuMasterState);
 }
 
 static DEFAULT_IPL_ROM: [u8; IPL_ROM_LEN] = [
@@ -36,10 +51,12 @@ static DEFAULT_IPL_ROM: [u8; IPL_ROM_LEN] = [
 
 pub struct Apu {
     ram: Box<[u8]>,
-    ipl_rom: Box<[u8]>,
+    pub(crate) ipl_rom: Box<[u8]>,
+    pub(crate) output_ports: [u8; 4],
 
     pub(crate) smp: Option<Box<Smp>>,
     pub(crate) dsp: Option<Box<Dsp>>,
+    pub(crate) script700_runtime: Option<Box<Runtime>>,
 
     timers: [Timer; 3],
 
@@ -52,9 +69,11 @@ impl Apu {
         let mut ret = Box::new(Apu {
             ram: vec![0; RAM_LEN].into_boxed_slice(),
             ipl_rom: DEFAULT_IPL_ROM.iter().cloned().collect::<Vec<_>>().into_boxed_slice(),
+            output_ports: [0u8; 4],
 
             smp: None,
             dsp: None,
+            script700_runtime: None,
 
             timers: [Timer::new(256), Timer::new(256), Timer::new(32)],
 
@@ -64,21 +83,20 @@ impl Apu {
         let ret_ptr = &mut *ret as *mut _;
         ret.smp = Some(Box::new(Smp::new(ret_ptr)));
         ret.dsp = Some(Dsp::new(ret_ptr));
+        ret.script700_runtime = Some(Runtime::new(ret_ptr));
         ret
     }
 
-    pub fn from_spc(spc: &Spc) -> Box<Apu> {
-        let mut ret = Apu::new();
-
+    pub fn read_spc(&mut self, spc: &Spc) {
         for i in 0..RAM_LEN {
-            ret.ram[i] = spc.ram[i];
+            self.ram[i] = spc.ram[i];
         }
         for i in 0..IPL_ROM_LEN {
-            ret.ipl_rom[i] = spc.ipl_rom[i];
+            self.ipl_rom[i] = spc.ipl_rom[i];
         }
 
         {
-            let smp = ret.smp.as_mut().unwrap();
+            let smp = self.smp.as_mut().unwrap();
             smp.reg_pc = spc.pc;
             smp.reg_a = spc.a;
             smp.reg_x = spc.x;
@@ -87,23 +105,37 @@ impl Apu {
             smp.reg_sp = spc.sp;
         }
 
-        ret.dsp.as_mut().unwrap().set_state(spc);
+        self.dsp.as_mut().unwrap().set_state(spc);
 
         for i in 0..3 {
-            let target = ret.ram[0xfa + i];
-            ret.timers[i].set_target(target);
+            let target = self.ram[0xfa + i];
+            self.timers[i].set_target(target);
         }
-        let control_reg = ret.ram[0xf1];
-        ret.set_control_reg(control_reg);
+        let control_reg = self.ram[0xf1];
+        self.set_control_reg(control_reg);
 
-        ret.dsp_reg_address = ret.ram[0xf2];
+        self.dsp_reg_address = self.ram[0xf2];
 
         // Restore APUIO registers
         for a in 0xf4..=0xf7 {
-            ret.ram[a] = spc.ram[a];
+            self.ram[a] = spc.ram[a];
         }
 
+        self.script700_runtime.as_mut().unwrap().reset();
+    }
+
+    pub fn from_spc(spc: &Spc) -> Box<Apu> {
+        let mut ret = Apu::new();
+        ret.read_spc(spc);
         ret
+    }
+
+    pub fn read_anonymous_script700(&mut self, script: &str) {
+        self.script700_runtime.as_mut().unwrap().read_anonymous_script(script);
+    }
+
+    pub fn load_script700<P: AsRef<Path>>(&mut self, script_path: P) -> io::Result<()> {
+        self.script700_runtime.as_mut().unwrap().load_script(script_path)
     }
 
     pub fn render(&mut self, left_buffer: &mut [i16], right_buffer: &mut [i16], num_samples: i32) {
@@ -118,6 +150,7 @@ impl Apu {
     }
 
     pub fn cpu_cycles_callback(&mut self, num_cycles: i32) {
+        self.script700_runtime.as_mut().unwrap().cycles_callback(num_cycles);
         self.dsp.as_mut().unwrap().cycles_callback(num_cycles);
         for timer in self.timers.iter_mut() {
             timer.cpu_cycles_callback(num_cycles);
@@ -133,6 +166,10 @@ impl Apu {
                 0xf2 => self.dsp_reg_address,
                 0xf3 => self.dsp.as_mut().unwrap().get_register(self.dsp_reg_address),
 
+                0xf4 ..= 0xf7 => {
+                    self.script700_runtime.as_mut().unwrap().trigger_port_event(false, (address - 0xf4) as u8);
+                    self.ram[address as usize]
+                }
                 0xfa ..= 0xfc => 0,
 
                 0xfd => self.timers[0].read_counter(),
@@ -157,7 +194,10 @@ impl Apu {
                 0xf2 => { self.dsp_reg_address = value; },
                 0xf3 => { self.dsp.as_mut().unwrap().set_register(self.dsp_reg_address, value); },
 
-                // 0xf4 ..= 0xf9 => { self.ram[address as usize] = value; },
+                0xf4 ..= 0xf7 => {
+                    self.output_ports[(address - 0xf4) as usize] = value;
+                    self.script700_runtime.as_mut().unwrap().trigger_port_event(true, (address - 0xf4) as u8);
+                },
                 0xf8 ..= 0xf9 => { self.ram[address as usize] = value; },
 
                 0xfa => { self.timers[0].set_target(value); },
@@ -198,14 +238,10 @@ impl Apu {
     fn set_control_reg(&mut self, value: u8) {
         self.is_ipl_rom_enabled = (value & 0x80) != 0;
         if (value & 0x20) != 0 {
-            // self.write_u8(0xf6, 0x00);
-            // self.write_u8(0xf7, 0x00);
             self.ram[0xf6] = 0;
             self.ram[0xf7] = 0;
         }
         if (value & 0x10) != 0 {
-            // self.write_u8(0xf4, 0x00);
-            // self.write_u8(0xf5, 0x00);
             self.ram[0xf4] = 0;
             self.ram[0xf5] = 0;
         }
@@ -227,4 +263,12 @@ impl Apu {
         let loop_address = self.dsp.as_mut().unwrap().read_source_dir_loop_address(source as i32);
         (sample_address, loop_address)
     }
+
+    pub fn write_to_input_port(&mut self, port: usize, value: u8) {
+        debug_assert!(port < 4);
+        self.ram[0xf4 + port] = value;
+    }
 }
+
+unsafe impl Send for Apu {}
+unsafe impl Sync for Apu {}

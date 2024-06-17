@@ -107,6 +107,7 @@ file-dialog-filter-output-mpeg4 = MPEG-4 video
 file-dialog-filter-output-matroska = Matroska video
 file-dialog-filter-output-quicktime = QuickTime video
 
+script700-load-prompt = An associated Script700 file was detected: "{$filename}". Would you like to load it?
 prores-export-dialog-prompt = You have chosen to export a QuickTime video. Do you want to export in ProRes 4444 format to preserve alpha information for video editing? Note that ProRes 4444 is a lossless codec, so the exported file may be very large.
 
 formatted-duration-error = <error>

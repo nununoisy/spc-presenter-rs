@@ -74,6 +74,7 @@ export component MainWindow inherits Window {
     callback update-config(bool);
 
     in property <string> version: "?";
+    in property <string> snes-apu-version: "?";
     in property <string> ffmpeg-version: "?";
 
     in property <bool> rendering: false;
@@ -93,6 +94,7 @@ export component MainWindow inherits Window {
     };
 
     in property <[string]> metadata-lines: [];
+    in property <string> script700-path: "";
     in-out property <[[int]]> channel-base-colors: [];
     in-out property <[SampleConfig]> sample-configs: [];
     in-out property <int> fadeout-duration: 180;
@@ -242,7 +244,7 @@ export component MainWindow inherits Window {
                             alignment: center;
 
                             Text {
-                                text: "snes-apu-spcp v" + root.version;
+                                text: "snes-apu-spcp v" + root.snes-apu-version;
                                 font-size: 14px;
                                 horizontal-alignment: center;
                             }
@@ -315,6 +317,33 @@ export component MainWindow inherits Window {
         for line in metadata-lines: Text {
             horizontal-alignment: center;
             text: line;
+        }
+
+        if script700-path != "": HorizontalLayout {
+            alignment: center;
+            spacing: 8px;
+
+            VerticalLayout {
+                alignment: center;
+
+                Rectangle {
+                    background: #3a943a;
+                    width: 56px;
+                    height: 18px;
+                    border-radius: 2px;
+
+                    Text {
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        text: "Script700";
+                        color: white;
+                    }
+                }
+            }
+
+            Text {
+                text: root.script700-path;
+            }
         }
 
         HorizontalLayout {

@@ -107,7 +107,8 @@ file-dialog-filter-output-mpeg4 = Vídeo MPEG-4
 file-dialog-filter-output-matroska = Vídeo Matroska
 file-dialog-filter-output-quicktime = Vídeo QuickTime
 
-prores-export-dialog-prompt = Escogió exportar un vídeo QuickTime. ¿Quieres utilizar el códec ProRes 4444 para mantener la información alfa para que pudiere importarla en un editor de vídeo? Tenga en cuenta que ProRes 4444 es un códec sin pérdida y entonces el vídeo exportado podría ser muy grande.
+script700-load-prompt = Se ha detectado un archivo Script700 relacionado: "{$filename}". ¿Desea cargarlo?
+prores-export-dialog-prompt = Escogió exportar un vídeo QuickTime. ¿Desea utilizar el códec ProRes 4444 para mantener la información alfa para que pudiere importarla en un editor de vídeo? Tenga en cuenta que ProRes 4444 es un códec sin pérdida y entonces el vídeo exportado podría ser muy grande.
 
 formatted-duration-error = <error>
 formatted-duration-unknown = <desconocido>

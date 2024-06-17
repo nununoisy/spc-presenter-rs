@@ -5,6 +5,7 @@ mod brr_sample;
 use anyhow::Result;
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
+use std::fs;
 use std::path::Path;
 use spc_spcp::spc::Spc;
 use snes_apu_spcp::{Apu, ApuStateReceiver, ResamplingMode};
@@ -44,6 +45,10 @@ impl Emulator {
             filter: filter::BlarggSpcFilter::default(),
             filter_enabled: false
         })
+    }
+
+    pub fn load_script700<P: AsRef<Path>>(&mut self, script_path: P) -> Result<()> {
+        Ok(self.apu.load_script700(script_path)?)
     }
 
     pub fn init(&mut self) {

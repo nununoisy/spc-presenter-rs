@@ -7,7 +7,7 @@ use crate::sample_processing::{SampleProcessor, SampleProcessorProgress, SampleD
 
 #[derive(Clone)]
 pub enum SampleProcessingThreadRequest {
-    StartProcessing(String),
+    StartProcessing(String, String),
     CancelProcessing,
     Terminate
 }
@@ -41,14 +41,17 @@ pub fn sample_processing_thread<F>(cb: F) -> (thread::JoinHandle<()>, mpsc::Send
         println!("Sample processing thread started");
 
         'main: loop {
-            let spc_path = match rx.recv().unwrap() {
-                SampleProcessingThreadRequest::StartProcessing(spc_path) => spc_path,
+            let (spc_path, script700_path) = match rx.recv().unwrap() {
+                SampleProcessingThreadRequest::StartProcessing(spc_path, script700_path) => (spc_path, script700_path),
                 SampleProcessingThreadRequest::CancelProcessing => continue 'main,
                 SampleProcessingThreadRequest::Terminate => break 'main
             };
             cb(SampleProcessingThreadMessage::ProcessingStarting);
 
             let mut sample_processor = rt_unwrap!(SampleProcessor::from_spc(spc_path), cb, 'main);
+            if !script700_path.is_empty() {
+                rt_unwrap!(sample_processor.load_script700(script700_path), cb, 'main);
+            }
 
             let mut last_progress_timestamp = Instant::now();
             // Janky way to force an update
@@ -56,7 +59,7 @@ pub fn sample_processing_thread<F>(cb: F) -> (thread::JoinHandle<()>, mpsc::Send
 
             'processing: loop {
                 match rx.try_recv() {
-                    Ok(SampleProcessingThreadRequest::StartProcessing(_)) => {
+                    Ok(SampleProcessingThreadRequest::StartProcessing(_, _)) => {
                         cb(SampleProcessingThreadMessage::Error(anyhow!("Cannot start processing another SPC without cancelling first.")));
                     },
                     Ok(SampleProcessingThreadRequest::CancelProcessing) => {

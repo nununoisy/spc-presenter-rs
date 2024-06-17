@@ -29,7 +29,7 @@ impl Timer {
 
             self.counter_low = self.counter_low.wrapping_add(1);
             if self.target != 0 && self.counter_low == self.target {
-                self.counter_high += 1;
+                self.counter_high = self.counter_high.wrapping_add(1);
                 self.counter_low = 0;
             }
         }

@@ -34,7 +34,9 @@ impl BrrStreamDecoder {
         self.is_looping = (raw_header & 0x02) != 0;
         self.filter = (raw_header >> 2) & 0x03;
         self.shift = raw_header >> 4;
+    }
 
+    pub fn reset(&mut self) {
         self.sample_index = 0;
         self.decode_pos = 0;
     }

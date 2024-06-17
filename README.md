@@ -23,8 +23,13 @@ video.
 ## Features
 
 - Supports SPC modules.
-  - Support for Script700 is planned.
-  - Support for songs that require 5A22/65816 emulation (SMC/SNSF) are planned.
+  - Script700 is supported.
+    - Implements most of the commands supported by SNESAPU.DLL.
+    - Data area and call stack are dynamically allocated, so there is no limit on their size.
+    - Support for the extended area is planned.
+    - Support for importing files is planned.
+    - Compatible with Script700 exports from the C700 VST.
+  - Support for songs that require 5A22/65816 emulation (SMC/SNSF) is planned.
 - Based on a custom fork of snes-apu with a much more accurate S-DSP:
   - Reorders operations to more closely match a cycle-accurate implementation.
   - Properly emulates internal register sizes and wraps/clamps values accurately.
@@ -33,7 +38,7 @@ video.
   - Reimplements the BRR decoder to properly decode 4 samples at a time.
   - Added hardware-accurate sample interpolation.
   - Correctly mixes negative channel volumes (SNES "surround").
-  - Remaining inaccuracies to be fixed:
+  - Remaining inaccuracies:
     - S-DSP is not yet cycle-accurate. It instead runs in 64 SMP-clock periods.
 - Automatic BRR sample analysis:
   - Rips samples from the S-DSP as the song plays.

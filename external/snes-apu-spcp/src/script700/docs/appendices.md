@@ -1,6 +1,18 @@
 Appendices
 ==========
 
+Number Format
+-------------
+
+By default, numbers are parsed as decimal (base-10).
+
+Numbers prefixed with `$` or `0x` are parsed as hexadecimal (base-16).
+
+For example, you can express the number 255 (decimal) in any of the following ways:
+- `#255`
+- `#$ff`
+- `#0xFF`
+
 Error Handling
 --------------
 

@@ -1,0 +1,22 @@
+; w0: Number of milliseconds to wait before enabling drums
+; In this case, 57 seconds
+m #57000 w0
+
+; Wait loop
+r0 ; Disable call stack
+:0
+w #2048 ; 2048 cycles / 2048 kHz = 1 ms
+s #1 w0 ; Decrement loop counter
+c #0 w0  bne 0 ; Loop if counter is not zero
+
+; Enable Yoshi drums
+m #0x02 i1 ; Write $02 to port 1
+
+; End
+q
+
+e
+::
+
+e
+3E7F8888 :12 87C 8 2E 39

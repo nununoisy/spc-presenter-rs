@@ -7,9 +7,11 @@ build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [profile.release]
-lto = "fat"
-codegen-units = 1
+# TODO revert
+# lto = "fat"
+# codegen-units = 1
 panic = "abort"
+debug = true
 
 [dependencies]
 snes-apu-spcp = { path = "external/snes-apu-spcp" }

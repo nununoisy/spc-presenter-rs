@@ -10,7 +10,7 @@ use channel_settings::{ChannelSettingsManager, ChannelSettings};
 use filters::HighPassIIR;
 use oscilloscope::OscilloscopeState;
 use piano_roll::PianoRollState;
-use snes_apu_spcp::{ApuState, ApuStateReceiver};
+use snes_apu_spcp::{ApuChannelState, ApuMasterState, ApuStateReceiver};
 use tile_map::TileMap;
 use crate::config::PianoRollConfig;
 use crate::sample_processing::SampleData;
@@ -118,7 +118,7 @@ impl Visualizer {
 }
 
 impl ApuStateReceiver for Visualizer {
-    fn receive(&mut self, channel: usize, state: ApuState) {
+    fn receive(&mut self, channel: usize, state: ApuChannelState) {
         if !self.sample_data.contains_key(&state.source) {
             self.sample_data.insert(state.source, SampleData::default());
         }
@@ -177,4 +177,6 @@ impl ApuStateReceiver for Visualizer {
         self.piano_roll_states[channel].consume(&state, settings);
         self.channel_last_states[channel] = state;
     }
+
+    fn receive_master(&mut self, _state: ApuMasterState) {}
 }

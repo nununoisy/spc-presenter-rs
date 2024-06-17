@@ -18,7 +18,7 @@ use sample_processing_thread::{SampleProcessingThreadMessage, SampleProcessingTh
 use audio_previewer::{AudioPreviewer, audio_stopped_timer};
 use localization::{LocalizationAdapter, fluent_args};
 use fluent::FluentArgs;
-use snes_apu_spcp::ResamplingMode;
+use snes_apu_spcp::{ResamplingMode, search_for_script700_file};
 use crate::config::Config;
 use crate::renderer::render_options::{RendererOptions, StopCondition};
 use crate::sample_processing::SampleProcessorProgress;
@@ -159,6 +159,20 @@ fn browse_for_config_export_dialog(localization_adapter: Arc<Mutex<LocalizationA
     }
 }
 
+fn confirm_load_script700_dialog<P: AsRef<Path>>(localization_adapter: Arc<Mutex<LocalizationAdapter>>, filename: P) -> bool {
+    let localization_adapter = localization_adapter.lock().unwrap();
+    let dialog_prompt = localization_adapter
+        .get("script700-load-prompt", Some(&fluent_args!(filename: filename.as_ref().display().to_string())), true);
+    drop(localization_adapter);
+
+    let dialog = MessageDialog::new()
+        .set_title("SPCPresenter")
+        .set_text(dialog_prompt.as_str())
+        .set_type(MessageType::Info);
+
+    dialog.show_confirm().unwrap_or_default()
+}
+
 fn confirm_prores_export_dialog(localization_adapter: Arc<Mutex<LocalizationAdapter>>) -> bool {
     let localization_adapter = localization_adapter.lock().unwrap();
     let dialog_prompt = localization_adapter.get("prores-export-dialog-prompt", None, true);
@@ -168,7 +182,6 @@ fn confirm_prores_export_dialog(localization_adapter: Arc<Mutex<LocalizationAdap
         .set_title("SPCPresenter")
         .set_text(dialog_prompt.as_str())
         .set_type(MessageType::Info);
-
 
     dialog.show_confirm().unwrap_or_default()
 }
@@ -362,6 +375,7 @@ pub fn run() {
     }
 
     main_window.set_version(env!("CARGO_PKG_VERSION").into());
+    main_window.set_snes_apu_version(snes_apu_spcp::version().into());
     main_window.set_ffmpeg_version(crate::video_builder::ffmpeg_version().into());
 
     let options = Arc::new(Mutex::new(RendererOptions::default()));
@@ -691,12 +705,23 @@ pub fn run() {
                     options.lock().unwrap().input_path = path.clone();
                     main_window_weak.unwrap().set_metadata_lines(metadata_lines);
 
+                    let script700_path = search_for_script700_file(path.clone())
+                        .and_then(|script700_path| {
+                            confirm_load_script700_dialog(localization_adapter.clone(), &script700_path)
+                                .then_some(script700_path)
+                        })
+                        .unwrap_or_default();
+                    main_window_weak.unwrap().set_script700_path(script700_path.file_name().unwrap_or_default().to_str().unwrap().into());
+
+                    let script700_path = script700_path.to_str().unwrap().to_string();
+                    options.lock().unwrap().script700_path = script700_path.clone();
+
                     main_window_weak.unwrap().invoke_reformat_duration();
 
                     main_window_weak.unwrap().invoke_reset_sample_configs();
                     main_window_weak.unwrap().set_sample_configs(slint::ModelRc::new(slint::VecModel::from(vec![])));
                     spt_tx.send(SampleProcessingThreadRequest::CancelProcessing).unwrap();
-                    spt_tx.send(SampleProcessingThreadRequest::StartProcessing(path.clone())).unwrap();
+                    spt_tx.send(SampleProcessingThreadRequest::StartProcessing(path.clone(), script700_path.clone())).unwrap();
 
                     path.into()
                 },

@@ -1,0 +1,236 @@
+import { VerticalBox, Button, Slider } from "std-widgets.slint";
+import { ToolbarButton } from "./toolbar-button.slint";
+import { SeekBar, BufferingSeekBar } from "./seek-bar.slint";
+import { SlintApuChannelState, ApuChannelStateView, SlintApuMasterState, ApuMasterStateView } from "./apu-state-view.slint";
+export { SlintApuChannelState, SlintApuMasterState }
+
+import "./U001-Reg.ttf";
+import "./U001-Bol.ttf";
+
+export component MainWindow inherits Window {
+    in-out property <bool> playing: false;
+
+    in property <string> spc-title: "Title";
+    in property <string> spc-artist: "Artist";
+    in property <string> spc-game: "Game";
+    in property <string> spc-ripper: "Ripper";
+    in-out property <duration> spc-duration: 0s;
+    in-out property <duration> spc-fadeout: 0s;
+    in-out property <duration> playback-position: 0s;
+    in property <duration> buffer-length: 0s;
+    in property <SlintApuMasterState> apu-master-state;
+    in property <[SlintApuChannelState]> apu-channel-states: [{}, {}, {}, {}, {}, {}, {}, {}];
+
+    property <bool> info-open: false;
+    property <bool> buffering: playback-position > buffer-length;
+    property <duration> seek-position: 0s;
+    out property <bool> seeking: false;
+    out property <bool> repeat: false;
+    out property <bool> repeat-infinite: false;
+    out property <duration> fadeout-start: repeat-infinite ? 0s : spc-duration;
+    out property <duration> playback-duration: repeat-infinite ? 0s : fadeout-start + spc-fadeout;
+
+    callback init-audio();
+    callback play-pause();
+    callback open-spc();
+    callback seek(duration);
+    pure callback format-duration(duration) -> string;
+    
+    title: "SPCPresenter Mini";
+    icon: @image-url("spc-presenter-icon.png");
+    min-height: 250px;
+    min-width: 600px;
+    default-font-family: "U001";
+    
+    Rectangle {
+        x: 0;
+        y: 0;
+        z: 5;
+        width: root.width;
+        height: root.height;
+        
+        background: @linear-gradient(135deg, Colors.rgba(0, 0, 0, 96) 0%, Colors.rgba(0, 0, 0, 0) 200%);
+        opacity: root.info-open ? 1 : 0;
+
+        animate opacity {
+            duration: 200ms;
+            easing: ease-in-out;
+        }
+
+        TouchArea {
+            x: 0;
+            y: 0;
+            width: root.width;
+            height: root.height;
+
+            enabled: root.info-open;
+            clicked => {
+                root.info-open = false;
+            }
+        }
+
+        i-title-sizing-text := Text {
+            x: 0;
+            y: 0;
+            opacity: 0;
+            text: root.spc-title;
+            font-size: 32px;
+            font-weight: 700;
+        }
+
+        VerticalLayout {
+            x: 16px;
+            y: 8px;
+            width: parent.width - 32px;
+            height: parent.height - 72px;
+
+            alignment: center;
+            spacing: 6px;
+
+            Text {
+                text: root.spc-title;
+                font-size: i-title-sizing-text.width > parent.width ? 24px : 32px;
+                font-weight: 700;
+                wrap: word-wrap;
+            }
+            Text {
+                text: root.spc-artist;
+                font-size: 16px;
+                wrap: word-wrap;
+            }
+            Text {
+                text: root.spc-game;
+                font-size: 16px;
+                wrap: word-wrap;
+            }
+        }
+    }
+
+    VerticalBox {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+
+        alignment: stretch;
+
+        i-info-view := HorizontalLayout {
+            alignment: stretch;
+            spacing: 4px;
+
+            ApuMasterStateView {
+                state: root.apu-master-state;
+            }
+            for state[channel] in root.apu-channel-states: ApuChannelStateView {
+                channel: channel;
+                state: state;
+            }
+        }
+
+        HorizontalLayout {
+            alignment: stretch;
+            spacing: 8px;
+
+            Rectangle {
+                horizontal-stretch: 0;
+            }
+            Text {
+                text: root.seeking ? root.format-duration(root.seek-position) : root.format-duration(root.playback-position);
+                width: 40px;
+                horizontal-stretch: 0;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+            if root.buffering: BufferingSeekBar {}
+            if !root.buffering: SeekBar {
+                minimum: 0;
+                maximum: root.playback-duration / 1ms;
+                value: clamp(root.playback-position / 1ms, 0, root.playback-duration / 1ms);
+                buffer-length: clamp(root.buffer-length / 1ms, 0, root.playback-duration / 1ms);
+                changed(value) => {
+                    root.seeking = true;
+                    root.play-pause();
+                    root.seek-position = value * 1ms;
+                }
+                released(value) => {
+                    root.seeking = false;
+                    root.seek(value * 1ms);
+                    root.play-pause();
+                }
+            }
+            Text {
+                text: root.buffering ? root.format-duration(root.buffer-length) :
+                      root.repeat-infinite ? "∞" : root.format-duration(root.playback-duration);
+                width: 40px;
+                horizontal-stretch: 0;
+                horizontal-alignment: left;
+                vertical-alignment: center;
+            }
+            Rectangle {
+                horizontal-stretch: 0;
+            }
+        }
+
+        Rectangle {
+            height: 48px;
+        }
+    }
+
+    HorizontalLayout {
+        x: 8px;
+        y: root.height - 56px;
+        z: 10;
+        width: root.width - 16px;
+        height: 48px;
+
+        alignment: stretch;
+        spacing: 8px;
+
+        ToolbarButton {
+            width: self.height;
+            icon: root.info-open ? @image-url("dismiss.svg") : @image-url("info.svg");
+            destructive: root.info-open;
+            clicked => {
+                root.info-open = !root.info-open;
+            }
+        }
+        Rectangle {}
+        ToolbarButton {
+            width: self.height;
+            icon: @image-url("previous.svg");
+            clicked => { root.seek(0s); }
+        }
+        Button {
+            width: self.height;
+            icon: root.playing ? @image-url("pause.svg") : @image-url("play.svg");
+            colorize-icon: true;
+            checkable: true;
+            checked <=> root.playing;
+            clicked => {
+                root.play-pause();
+            }
+        }
+        ToolbarButton {
+            width: self.height;
+            icon: root.repeat-infinite ? @image-url("infinity.svg") :
+                  root.repeat ? @image-url("repeat-all.svg") : @image-url("repeat-all-off.svg");
+
+            clicked => {
+                if (root.repeat-infinite) {
+                    root.repeat = false;
+                    root.repeat-infinite = false;
+                } else if (root.repeat) {
+                    root.repeat-infinite = true;
+                } else {
+                    root.repeat = true;
+                }
+            }
+        }
+        Rectangle {}
+        ToolbarButton {
+            width: self.height;
+            icon: @image-url("folder-open.svg");
+            clicked => { root.open-spc(); }
+        }
+    }
+}

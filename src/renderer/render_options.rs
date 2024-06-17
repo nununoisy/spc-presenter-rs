@@ -67,6 +67,7 @@ extra_str_traits!(StopCondition);
 #[derive(Clone)]
 pub struct RendererOptions {
     pub input_path: String,
+    pub script700_path: String,
     pub video_options: VideoOptions,
 
     pub stop_condition: StopCondition,
@@ -81,6 +82,7 @@ impl Default for RendererOptions {
     fn default() -> Self {
         Self {
             input_path: "".to_string(),
+            script700_path: "".to_string(),
             video_options: VideoOptions {
                 output_path: "".to_string(),
                 metadata: Default::default(),

@@ -100,6 +100,7 @@ pub struct Voice {
 
     every_other_sample: bool,
     pub kon_queued: bool,
+    pub kon_latched: bool,
     pub kof_queued: bool
 }
 
@@ -141,11 +142,12 @@ impl Voice {
             resample_buffer_pos: 0,
 
             output_buffer: VoiceBuffer::new(),
-            is_muted: false,
+            is_muted: true,
             is_solod: false,
 
             every_other_sample: false,
             kon_queued: false,
+            kon_latched: false,
             kof_queued: false
         }
     }
@@ -167,6 +169,12 @@ impl Voice {
     pub fn render_sample(&mut self, last_voice_out: i32, noise: i32, are_any_voices_solod: bool) -> VoiceOutput {
         // last misc29
         self.every_other_sample = !self.every_other_sample;
+        if !self.every_other_sample && self.kon_queued {
+            self.kon_latched = false;
+        }
+
+        // last misc30
+        self.kon_queued = self.kon_latched;
 
         // voice1
         self.read_entry();
@@ -182,6 +190,7 @@ impl Voice {
         let mut pitch = ((self.pitch_high as i32) << 8) | (self.pitch_low as i32);
 
         // voice3b
+        self.brr_decoder.read_header(self.emulator().read_u8(self.sample_address));
 
         // voice3c
         if self.pitch_mod {
@@ -192,11 +201,13 @@ impl Voice {
         if self.kon_delay > 0 {
             if self.kon_delay == 5 {
                 self.sample_address = next_sample_address;
+                self.sample_offset = 0;
                 self.resample_buffer_pos = 0;
                 self.sample_block_index = 0;
                 self.sample_frame = 0;
                 self.edge_hit = true;
-                self.read_brr_header();
+                self.brr_decoder.read_header(0);
+                self.brr_decoder.reset();
             }
 
             self.envelope.kon_delay_tick();
@@ -247,7 +258,7 @@ impl Voice {
         sample = ((sample * self.envelope.level) >> 11) & !1;
         let envx_value = (self.envelope.level >> 4) as u8;
 
-        if self.brr_decoder.is_end && !self.brr_decoder.is_looping {
+        if self.dsp().master_reset || (self.brr_decoder.is_end && !self.brr_decoder.is_looping) {
             self.envelope.key_off();
             self.envelope.level = 0;
         }
@@ -257,7 +268,6 @@ impl Voice {
                 self.envelope.key_off();
             }
             if self.kon_queued {
-                self.kon_queued = false;
                 self.envelope.key_on();
                 self.kon_delay = 5;
             }
@@ -280,7 +290,8 @@ impl Voice {
                 } else {
                     self.sample_address += 9;
                 }
-                self.read_brr_header();
+                self.brr_decoder.reset();
+                self.sample_offset = 0;
                 self.sample_block_index += 1;
             }
         }
@@ -291,9 +302,6 @@ impl Voice {
         }
 
         // voice5
-        if looped {
-            self.endx_latch = true;
-        }
         let ret =
             if self.is_solod || (!self.is_muted && !are_any_voices_solod) {
                 VoiceOutput {
@@ -309,6 +317,13 @@ impl Voice {
                 }
             };
         self.output_buffer.write(ret);
+
+        if looped {
+            self.endx_latch = true;
+        }
+        if self.kon_delay == 5 {
+            self.endx_latch = false;
+        }
 
         // voice6
         let outx_value = ((sample >> 8) as i8) as u8;
@@ -332,11 +347,6 @@ impl Voice {
     fn read_entry(&mut self) {
         self.sample_start_address = self.dsp().read_source_dir_start_address(self.source as i32);
         self.loop_start_address = self.dsp().read_source_dir_loop_address(self.source as i32);
-    }
-
-    fn read_brr_header(&mut self) {
-        self.brr_decoder.read_header(self.emulator().read_u8(self.sample_address));
-        self.sample_offset = 0;
     }
 
     fn decode_brr_samples(&mut self) {

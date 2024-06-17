@@ -1,0 +1,210 @@
+export struct SlintApuChannelState {
+    volume-left: int,
+    volume-right: int,
+    pitch: int,
+    envelope: int,
+    output-left: int,
+    output-right: int,
+    echo-on: bool,
+    pitch-modulation-on: bool,
+    noise-on: bool
+}
+
+export struct SlintApuMasterState {
+    master-volume-left: int,
+    master-volume-right: int,
+    echo-volume-left: int,
+    echo-volume-right: int,
+    echo-delay: int,
+    echo-feedback: int,
+    output-left: int,
+    output-right: int
+}
+
+component StateBar {
+    in property <int> value: 1;
+    in property <int> maximum: 1;
+    in property <int> log-base: 1;
+    in property <color> background: red;
+
+    property <float> i-value: log-base > 1 ? log(((log-base - 1) * abs(value) / maximum) + 1, log-base) : abs(value) / maximum;
+
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
+
+    Rectangle {
+        x: 0;
+        y: root.height - self.height;
+        width: root.width;
+        height: round(root.i-value * root.height / 1px) * 1px;
+        background: @linear-gradient(180deg, root.background 0%, root.background.darker(30%) 100%);
+    }
+}
+
+export component ApuChannelStateView {
+    in property <int> channel: 0;
+    in property <SlintApuChannelState> state;
+    
+    min-height: 100px;
+    min-width: 50px;
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
+
+    VerticalLayout {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+
+        alignment: stretch;
+        spacing: 4px;
+        
+        HorizontalLayout {
+            alignment: stretch;
+            vertical-stretch: 0;
+
+            Text {
+                text: channel + 1;
+                horizontal-stretch: 0;
+            }
+            Rectangle {}
+            Text {
+                text: "E";
+                color: #00cc00;
+                horizontal-stretch: 0;
+                opacity: root.state.echo-on ? 1 : 0;
+            }
+            Text {
+                text: "P";
+                color: #0066ff;
+                horizontal-stretch: 0;
+                opacity: root.state.pitch-modulation-on ? 1 : 0;
+            }
+            Text {
+                text: "N";
+                color: #ff9900;
+                horizontal-stretch: 0;
+                opacity: root.state.noise-on ? 1 : 0;
+            }
+        }
+        HorizontalLayout {
+            alignment: stretch;
+            spacing: 2px;
+
+            StateBar {
+                value: root.state.volume-left;
+                maximum: 128;
+                background: #00cc00;
+                log-base: 2;
+            }
+            StateBar {
+                value: root.state.volume-right;
+                maximum: 128;
+                background: #00cc00;
+                log-base: 2;
+            }
+            StateBar {
+                value: root.state.pitch;
+                maximum: 16384;
+                background: #ff9900;
+            }
+            StateBar {
+                value: root.state.envelope;
+                maximum: 2048;
+                background: #cc0000;
+            }
+            StateBar {
+                value: root.state.output-left;
+                maximum: 32768;
+                background: #0000cc;
+                horizontal-stretch: 2;
+                log-base: 10;
+            }
+            StateBar {
+                value: root.state.output-right;
+                maximum: 32768;
+                background: #0000cc;
+                horizontal-stretch: 2;
+                log-base: 10;
+            }
+        }
+    }
+}
+
+export component ApuMasterStateView {
+    in property <SlintApuMasterState> state;
+
+    min-height: 100px;
+    min-width: 75px;
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
+
+    VerticalLayout {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+
+        alignment: stretch;
+        spacing: 4px;
+
+        Text {
+            text: "Mixer";
+            horizontal-alignment: center;
+            vertical-stretch: 0;
+        }
+        HorizontalLayout {
+            alignment: stretch;
+            spacing: 2px;
+
+            StateBar {
+                value: root.state.master-volume-left;
+                maximum: 128;
+                background: #00cc00;
+                log-base: 2;
+            }
+            StateBar {
+                value: root.state.master-volume-right;
+                maximum: 128;
+                background: #00cc00;
+                log-base: 2;
+            }
+            StateBar {
+                value: root.state.echo-volume-left;
+                maximum: 128;
+                background: #ff9900;
+                log-base: 2;
+            }
+            StateBar {
+                value: root.state.echo-volume-right;
+                maximum: 128;
+                background: #ff9900;
+                log-base: 2;
+            }
+            StateBar {
+                value: root.state.echo-delay;
+                maximum: 15;
+                background: #0066ff;
+            }
+            StateBar {
+                value: root.state.echo-feedback;
+                maximum: 128;
+                background: #cc0000;
+            }
+            StateBar {
+                value: root.state.output-left;
+                maximum: 32768;
+                background: #0000cc;
+                horizontal-stretch: 3;
+                log-base: 10;
+            }
+            StateBar {
+                value: root.state.output-right;
+                maximum: 32768;
+                background: #0000cc;
+                horizontal-stretch: 3;
+                log-base: 10;
+            }
+        }
+    }
+}

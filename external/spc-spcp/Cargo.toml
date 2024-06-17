@@ -1,6 +1,7 @@
 [package]
 name = "spc-spcp"
 version = "0.2.0"
+edition = "2021"
 authors = ["nununoisy <noah.sweilem@gmail.com>", "ferris <jake@fusetools.com>"]
 description = "Fork of the emu-rs library for manipulating SPC (Super Nintendo music) files."
 homepage = "https://github.com/nununoisy/spc-presenter-rs"

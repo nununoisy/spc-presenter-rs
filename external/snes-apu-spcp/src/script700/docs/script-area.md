@@ -4,54 +4,55 @@ Script Area
 Commands
 --------
 
-### `:[label]` - Branch Label
+### `:[label]` - Label
 Specifies a location that can be branched to.
 - `[label]` - A unique number between 0 and 1023 (inclusive).
 
 ### `w [cycles]` - Wait
 Pauses execution of the script for a short time while the SPC700 continues playing.
-- `[cycles]` - Number of SPC700 clock cycles to pause for. There are 2,048,000 cycles in a second.
+The duration of the pause is specified in SPC700 clock cycles: there are 2,048,000 cycles in a second.
+- `[cycles]` - Duration parameter (class: numeric)
 
 > [!CAUTION]  
 > A runtime error occurs if `[cycles]` evaluates to 0.
 
 ### `m [pSRC] [pDST]` - Move
 Assign the value at `[pSRC]` to `[pDST]`.
-- `[pSRC]` - Source parameter (group 1)
-- `[pDST]` - Destination parameter (group 2)
+- `[pSRC]` - Source parameter (class: source)
+- `[pDST]` - Destination parameter (class: destination)
 
 ### `c [CMP1] [CMP2]` - Compare
 Store values into the comparison registers `[CMP1]` and `[CMP2]` for use in the conditional branch commands and by the dynamic parameters.
-- `[CMP1]` - First parameter (group 1)
-- `[CMP2]` - Second parameter (group 1)
+- `[CMP1]` - First parameter (class: source)
+- `[CMP2]` - Second parameter (class: source)
 
 ### `a [pVAL] [pDST]` - Add
 Compute `[pDST] + [pVAL]` and store the result in `[pDST]`.
-- `[pVAL]` - Value parameter (group 1)
-- `[pDST]` - Destination parameter (group 2)
+- `[pVAL]` - Value parameter (class: source)
+- `[pDST]` - Destination parameter (class: destination)
 
 ### `s [pVAL] [pDST]` - Subtract
 Compute `[pDST] - [pVAL]` and store the result in `[pDST]`.
-- `[pVAL]` - Value parameter (group 1)
-- `[pDST]` - Destination parameter (group 2)
+- `[pVAL]` - Value parameter (class: source)
+- `[pDST]` - Destination parameter (class: destination)
 
 ### `u [pVAL] [pDST]` - Multiply
 Compute `[pDST] * [pVAL]` and store the result in `[pDST]`.
-- `[pVAL]` - Value parameter (group 1)
-- `[pDST]` - Destination parameter (group 2)
+- `[pVAL]` - Value parameter (class: source)
+- `[pDST]` - Destination parameter (class: destination)
 
 ### `d [pVAL] [pDST]` - Divide
 Compute `[pDST] / [pVAL]` and store the result in `[pDST]`.
-- `[pVAL]` - Value parameter (group 1)
-- `[pDST]` - Destination parameter (group 2)
+- `[pVAL]` - Value parameter (class: source)
+- `[pDST]` - Destination parameter (class: destination)
 
 > [!CAUTION]  
 > A runtime error occurs if `[pVAL]` evaluates to 0.
 
-### `n [pVAL] [op] [pDST]` - Other Computations
+### `n [pVAL] [op] [pDST]` - Numeric Computation
 Perform a computation with `[pVAL]` and `[pDST]` and store it into `[pDST]`, based on the value of `[op]`.
-- `[pVAL]` - Value parameter (group 1)
-- `[pDST]` - Destination parameter (group 2)
+- `[pVAL]` - Value parameter (class: source)
+- `[pDST]` - Destination parameter (class: destination)
 - `[op]` - Operation:
   - `+`: Addition
   - `-`: Subtraction
@@ -164,26 +165,26 @@ Parameters
 ----------
 
 ### `#[num]` - Numeric Literal
-32-bit numeric literal. `[num]` must be specified in decimal.
+32-bit numeric literal.
 
 ### `i[port]` - SPC700 Input Port
 One of the four SPC700 input port values. 8-bit writes only.
 
 If `[port]` exceeds 4, then the port number will be `[port] % 4`.
 
-Values written by scripts to `i[port]` are accessible from the SPC700 by reading ARAM `$00F0 + [port]`.
+Values written by scripts to `i[port]` are accessible from the SPC700 by reading ARAM `$00F4 + [port]`.
 
 ### `o[port]` - SPC700 Output Port
 One of the four SPC700 output port values. 8-bit reads only.
 
 If `[port]` exceeds 4, then the port number will be `[port] % 4`.
 
-Values written by the SPC700 at ARAM `$00F0 + [port]` are accessible by scripts as `o[port]`.
+Values written by the SPC700 at ARAM `$00F4 + [port]` are accessible by scripts as `o[port]`.
 
 ### `w[work]` - Script700 Working Memory
 8 32-bit values, start at 0.
 
-### `r[width] [addr]` - SPC700 ARAM
+### `r[width][addr]` - SPC700 ARAM
 
 - `b` - 8-bit (default)
 - `w` - 16-bit
@@ -193,7 +194,7 @@ Values written by the SPC700 at ARAM `$00F0 + [port]` are accessible by scripts 
 
 8-bit reads only.
 
-### `d[width] [offset]` - Script700 Data Area
+### `d[width][offset]` - Script700 Data Area
 
 - `b` - 8-bit (default)
 - `w` - 16-bit
@@ -206,14 +207,23 @@ Pointer to label specified with `:[label]`.
 Dynamic Parameters
 ------------------
 
-Replaces the first `?` with `[CMP1]` and second `?` with `[CMP2]`. Example:
+If you use a `?` in place of a number, it is replaced with:
+- the value of `[CMP1]` in the first parameter, or
+- the value of `[CMP2]` in the second parameter.
+
+Example:
 ```
 ; Typical method:
-m w0 w1  ; work[1] <- work[0]
+m w0 w1  ; work[0] -> work[1]
 
 ; With dynamic parameters:
-c #0 #1  ; CMP1 <- 0, CMP2 <- 1
-m w? w?  ; work[CMP1] <- work[CMP2]
+c #0 #1  ; 0 -> CMP1, 1 -> CMP2
+m w? w?  ; work[CMP1] -> work[CMP2]
+
+; Dereferencing: (work[CMP1] -> work[work[CMP2]])
+c #0 #1  ; 0 -> CMP1, 1 -> CMP2
+m #? w?  ; CMP1 -> CMP1, work[CMP2] -> CMP2
+m w? w?  ; work[CMP1] -> work[CMP2]
 ```
 
 Supported forms:
@@ -231,3 +241,19 @@ Supported forms:
 - `dw?`
 - `dd?`
 - `l?`
+
+Parameter Classes
+----------------
+
+### Source Parameters
+Parameters for data sources.
+If the parameter type is omitted, source parameters default to being output ports (`o[port]`).
+
+### Destination Parameters
+Parameters for data destinations.
+If the parameter type is omitted, destination parameters default to being input ports (`i[port]`).
+Destination parameters may not be numeric literals (`#[num]`) or labels (`l[label]`).
+
+### Numeric Parameters
+Parameters for numeric data that isn't necessarily associated with memory.
+If the parameter type is omitted, numeric parameters default to being numeric literals (`#[num]`).

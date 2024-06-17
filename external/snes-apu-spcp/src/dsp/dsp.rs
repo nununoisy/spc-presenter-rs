@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex};
-use crate::apu::{Apu, ApuState, ApuStateReceiver};
+use crate::apu::{Apu, ApuChannelState, ApuMasterState, ApuStateReceiver};
 use super::voice::{Voice, ResamplingMode};
 use super::filter::Filter;
 use super::ring_buffer::RingBuffer;
@@ -51,6 +51,8 @@ pub struct Dsp {
     echo_pos: i32,
     echo_length: i32,
 
+    pub(super) master_reset: bool,
+
     resampling_mode: ResamplingMode,
 
     pub state_receiver: Option<Arc<Mutex<dyn ApuStateReceiver>>>
@@ -87,6 +89,8 @@ impl Dsp {
             noise: 0x4000,
             echo_pos: 0,
             echo_length: 0,
+
+            master_reset: true,
 
             resampling_mode: ResamplingMode::Accurate,
 
@@ -238,17 +242,19 @@ impl Dsp {
                     let voice = self.voices.get_mut(channel).unwrap();
                     let last_sample = voice.output_buffer.read();
 
-                    let state = ApuState {
-                        source:voice.source,
-                        muted:voice.is_muted,
-                        envelope_level:voice.envelope.level,
-                        volume:(voice.vol_left as i8, voice.vol_right as i8),
-                        amplitude:(last_sample.left_out, last_sample.right_out),
-                        pitch:voice.pitch(),
-                        noise_clock:voice.noise_on.then_some( self.noise_clock),
-                        edge:voice.edge_detected(),
-                        kon_frames:voice.get_sample_frame(),
-                        sample_block_index:voice.sample_block_index
+                    let state = ApuChannelState {
+                        source: voice.source,
+                        muted: voice.is_muted,
+                        envelope_level: voice.envelope.level,
+                        volume: (voice.vol_left as i8, voice.vol_right as i8),
+                        amplitude: (last_sample.left_out, last_sample.right_out),
+                        pitch: voice.pitch(),
+                        noise_clock: voice.noise_on.then_some(self.noise_clock),
+                        edge: voice.edge_detected(),
+                        kon_frames: voice.get_sample_frame(),
+                        sample_block_index: voice.sample_block_index,
+                        echo_delay: (self.echo_write_enabled && voice.echo_on).then_some(self.echo_delay),
+                        pitch_modulation: voice.pitch_mod
                     };
 
                     self.state_receiver
@@ -258,6 +264,21 @@ impl Dsp {
                         .unwrap()
                         .receive(channel, state);
                 }
+
+                let state = ApuMasterState {
+                    master_volume: (self.vol_left as i8, self.vol_right as i8),
+                    echo_volume: (self.echo_vol_left as i8, self.echo_vol_right as i8),
+                    echo_delay: self.echo_delay,
+                    echo_feedback: self.echo_feedback as i8,
+                    amplitude: (left_out as i32, right_out as i32),
+                };
+
+                self.state_receiver
+                    .as_ref()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .receive_master(state);
             }
         }
 
@@ -393,7 +414,7 @@ impl Dsp {
         self.kon_cache = voice_mask;
         for i in 0..NUM_VOICES {
             if ((voice_mask as usize) & (1 << i)) != 0 {
-                self.voices[i].kon_queued = true;
+                self.voices[i].kon_latched = true;
             }
         }
     }
@@ -408,12 +429,22 @@ impl Dsp {
     fn set_flg(&mut self, value: u8) {
         self.noise_clock = value & 0x1f;
         self.echo_write_enabled = (value & 0x20) == 0;
+        for i in 0..NUM_VOICES {
+            self.voices[i].is_muted = (value & 0x40) != 0;
+        }
+        self.master_reset = (value & 0x80) != 0;
     }
 
     fn get_flg(&self) -> u8 {
         let mut result = self.noise_clock;
         if !self.echo_write_enabled {
             result |= 0x20;
+        }
+        if self.voices[0].is_muted {
+            result |= 0x40;
+        }
+        if self.master_reset {
+            result |= 0x80;
         }
         result
     }
@@ -476,7 +507,7 @@ impl Dsp {
         let mut result = 0u8;
         for i in 0..NUM_VOICES {
             if self.voices[i].get_endx_bit() {
-                result |= 1 << (i as u8);
+                result |= 1 << i;
             }
         }
         result

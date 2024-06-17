@@ -1,0 +1,21 @@
+; w0: Number of milliseconds to wait before enabling drums
+; In this case, 57 seconds
+m #57000 w0
+
+bra 100
+
+; Enable Yoshi drums
+m #0x02 i1 ; Write $02 to port 1
+
+; End
+q
+
+#i "drums2-waitloop.700"
+
+e
+::
+
+e
+#it "drums2-data.700"
+:34
+#ib "drums2-data.700"

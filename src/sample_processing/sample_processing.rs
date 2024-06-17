@@ -4,7 +4,7 @@ use std::path::Path;
 use std::thread;
 use std::time::Duration;
 use anyhow::{Result, anyhow};
-use snes_apu_spcp::{ApuState, ApuStateReceiver};
+use snes_apu_spcp::{ApuChannelState, ApuMasterState, ApuStateReceiver};
 use crate::emulator::{Emulator, BrrSample};
 use super::{sample_loudness, util, Yin};
 
@@ -172,7 +172,7 @@ impl SampleDetector {
 }
 
 impl ApuStateReceiver for SampleDetector {
-    fn receive(&mut self, _channel: usize, state: ApuState) {
+    fn receive(&mut self, _channel: usize, state: ApuChannelState) {
         if state.muted || (state.volume.0 == 0 && state.volume.1 == 0 && state.amplitude.0 == 0 && state.amplitude.1 == 0) {
             return;
         }
@@ -185,6 +185,8 @@ impl ApuStateReceiver for SampleDetector {
             })
             .or_insert(state.sample_block_index + 1);
     }
+
+    fn receive_master(&mut self, _state: ApuMasterState) {}
 }
 
 pub struct SampleProcessor {
@@ -222,6 +224,10 @@ impl SampleProcessor {
             detected_sources: HashMap::new(),
             processing_queue: VecDeque::new()
         })
+    }
+
+    pub fn load_script700<P: AsRef<Path>>(&mut self, script700_path: P) -> Result<()> {
+        self.emulator.load_script700(script700_path)
     }
 
     pub fn set_frame_count(&mut self, frame_count: usize) {

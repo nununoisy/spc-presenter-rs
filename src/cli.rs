@@ -148,7 +148,10 @@ fn get_renderer_options() -> RendererOptions {
         .arg(arg!(--"no-dim" "Disable background dimming")
             .required(false)
             .action(ArgAction::SetTrue))
-        .arg(arg!(-i --"import-config" <CONFIGFILE> "Import configuration from a RusticNES TOML file.")
+        .arg(arg!(-i --"import-config" <CONFIGFILE> "Import configuration from a RusticNES TOML file")
+            .value_parser(value_parser!(PathBuf))
+            .required(false))
+        .arg(arg!(-'7' --"script700" <SCRIPT> "Load Script700 file")
             .value_parser(value_parser!(PathBuf))
             .required(false))
         .arg(arg!(<spc> "SPC to render")
@@ -198,7 +201,14 @@ fn get_renderer_options() -> RendererOptions {
         None => Config::default()
     };
 
+    if let Some(script700_path) = matches.get_one::<PathBuf>("script700").cloned() {
+        options.script700_path = script700_path.to_str().unwrap().to_string();
+    }
+
     let mut sample_processor = SampleProcessor::from_spc(options.input_path.clone()).expect("Failed to initialize sample processor");
+    if !options.script700_path.is_empty() {
+        sample_processor.load_script700(&options.script700_path).unwrap();
+    }
     if let StopCondition::Frames(frames) = options.stop_condition {
         sample_processor.set_frame_count(frames as usize + options.fadeout_length as usize + 60);
     }

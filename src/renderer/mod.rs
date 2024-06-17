@@ -69,6 +69,11 @@ impl Renderer {
 
     pub fn start_encoding(&mut self) -> Result<()> {
         self.emulator.init();
+
+        if !self.options.script700_path.is_empty() {
+            self.emulator.load_script700(&self.options.script700_path)?;
+        }
+
         self.emulator.set_state_receiver(Some(self.viz.clone()));
         self.emulator.set_resampling_mode(self.options.config.emulator.resampling_mode);
         self.emulator.set_filter_enabled(self.options.config.emulator.filter_enabled);

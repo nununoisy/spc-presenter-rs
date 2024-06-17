@@ -183,7 +183,7 @@ export component Progress {
             clip: true;
 
             border-radius: 3px;
-            background: #313131;  // Palette.neutralLighter
+            background: #FFFFFF14;
 
             if !root.progress-indeterminate(): Rectangle {
                 x: 0;
@@ -193,8 +193,8 @@ export component Progress {
 
                 border-width: 1px;
                 border-radius: 3px;
-                border-color: root.progress-error() ? #bc2f32 : #60cdff;  // Palette.themePrimary
-                background: root.progress-error() ? #bc2f32 : #60cdff;  // Palette.themePrimary
+                border-color: root.progress-error() ? #bc2f32 : #60cdff;
+                background: root.progress-error() ? #bc2f32 : #60cdff;
 
                 animate width {
                     duration: 100ms;
@@ -209,8 +209,8 @@ export component Progress {
 
                 border-width: 1px;
                 border-radius: 3px;
-                border-color: root.i-progress-anim-tick > 1.4 ? transparent : #60cdff;  // Palette.themePrimary
-                background: root.i-progress-anim-tick > 1.4 ? transparent : #60cdff;  // Palette.themePrimary
+                border-color: root.i-progress-anim-tick > 1.4 ? transparent : #60cdff;
+                background: root.i-progress-anim-tick > 1.4 ? transparent : #60cdff;
             }
             if root.progress-indeterminate(): Rectangle {
                 x: (3.1666 * ((root.i-progress-anim-tick - 0.6) / 1.4) - 1.5) * parent.width;
@@ -220,8 +220,8 @@ export component Progress {
 
                 border-width: 1px;
                 border-radius: 3px;
-                border-color: root.i-progress-anim-tick < 0.6 ? transparent : #60cdff;  // Palette.themePrimary
-                background: root.i-progress-anim-tick < 0.6 ? transparent : #60cdff;  // Palette.themePrimary
+                border-color: root.i-progress-anim-tick < 0.6 ? transparent : #60cdff;
+                background: root.i-progress-anim-tick < 0.6 ? transparent : #60cdff;
             }
         }
         HorizontalLayout {

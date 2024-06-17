@@ -233,6 +233,9 @@ file-dialog-filter-output-matroska = Matroska video
 file-dialog-filter-output-quicktime = QuickTime video
 
 ## Dialog text
+# Query for the user to load an auto-detected Script700 file.
+# $filename (String) - Filename of the detected Script700 file.
+script700-load-prompt = An associated Script700 file was detected: "{$filename}". Would you like to load it?
 # Query for the user to encode the render with ProRes 4444 to preserve alpha information.
 prores-export-dialog-prompt = You have chosen to export a QuickTime video. Do you want to export in ProRes 4444 format to preserve alpha information for video editing? Note that ProRes 4444 is a lossless codec, so the exported file may be very large.
 
