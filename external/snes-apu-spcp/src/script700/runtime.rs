@@ -77,8 +77,8 @@ impl Runtime {
         self.input_ports_unbuffered = true;
     }
 
-    fn read_script(&mut self, script: &str, import_context: ImportContext) {
-        let tokenize_result = lexer::tokenize(script, "file.700");
+    fn read_script(&mut self, script: &str, import_context: ImportContext, file: &str) {
+        let tokenize_result = lexer::tokenize(script, file);
         self.script_ast = parser::script_area::parse(&tokenize_result, import_context.clone());
         let parsed_data_area = parser::data_area::parse(&tokenize_result, import_context.clone());
 
@@ -108,7 +108,7 @@ impl Runtime {
 
     pub fn read_anonymous_script(&mut self, script: &str) {
         self.reset();
-        self.read_script(script, ImportContext::AnonymousRoot)
+        self.read_script(script, ImportContext::AnonymousRoot, "<anonymous>")
     }
 
     pub fn load_script<P: AsRef<Path>>(&mut self, script_path: P) -> io::Result<()> {
@@ -120,7 +120,7 @@ impl Runtime {
             .to_path_buf();
 
         let script = fs::read_to_string(&script_path)?;
-        self.read_script(&script, ImportContext::Root(import_base_path));
+        self.read_script(&script, ImportContext::Root(import_base_path), script_path.as_ref().file_name().unwrap().to_str().unwrap());
 
         Ok(())
     }
@@ -244,7 +244,7 @@ impl Runtime {
     }
 
     pub fn cycles_callback(&mut self, num_cycles: i32) {
-        self.wait_cycles = self.wait_cycles.saturating_sub(num_cycles as u32);
+        self.wait_cycles = self.wait_cycles.saturating_sub(2 * num_cycles as u32);
         if self.wait_port_event.is_some() {
             self.wait_port_cycles += num_cycles as u32;
         }

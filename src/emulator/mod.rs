@@ -4,7 +4,6 @@ mod brr_sample;
 use anyhow::Result;
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
-use std::fs;
 use std::path::Path;
 use spc_spcp::spc::Spc;
 use snes_apu_spcp::{Apu, ApuStateReceiver, ResamplingMode};
