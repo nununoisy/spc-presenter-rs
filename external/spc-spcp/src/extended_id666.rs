@@ -166,24 +166,6 @@ impl ExtendedId666Data {
             chunks
         }))
     }
-
-    pub fn augment_id666_tag(&self, tag: &mut Id666Tag) {
-        for chunk in self.chunks.iter() {
-            match chunk {
-                ExtendedId666Chunk::SongTitle(s) => tag.song_title = s.clone(),
-                ExtendedId666Chunk::ArtistName(s) => tag.artist_name = s.clone(),
-                ExtendedId666Chunk::GameTitle(s) => tag.game_title = s.clone(),
-                ExtendedId666Chunk::DumperName(s) => tag.dumper_name = s.clone(),
-                ExtendedId666Chunk::DateDumped(s) => tag.date_dumped = s.clone(),
-                ExtendedId666Chunk::DumpingEmulator(e) => tag.dumping_emulator = e.clone(),
-                ExtendedId666Chunk::Comments(s) => tag.comments = s.clone(),
-
-                // TODO duration
-
-                _ => ()
-            }
-        }
-    }
 }
 
 impl Deref for ExtendedId666Data {

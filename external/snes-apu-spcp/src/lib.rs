@@ -3,6 +3,7 @@ mod smp;
 mod dsp;
 mod timer;
 mod script700;
+mod blargg_spc_filter;
 
 pub use apu::{Apu, ApuChannelState, ApuMasterState, ApuStateReceiver};
 pub use dsp::voice::ResamplingMode;

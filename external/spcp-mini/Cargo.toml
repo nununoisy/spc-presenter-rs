@@ -9,7 +9,6 @@ anyhow = "1.0"
 spc-spcp = { path = "../spc-spcp" }
 snes-apu-spcp = { path = "../snes-apu-spcp" }
 rodio = "0.18.1"
-hound = "3.3.1"
 slint = { version = "1.6.0", features = ["raw-window-handle-06"] }
 i-slint-backend-winit = "=1.6.0"
 native-dialog = "0.7.0"

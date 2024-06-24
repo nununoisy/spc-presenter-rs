@@ -1,4 +1,4 @@
-mod dsp_helpers;
+pub(crate) mod dsp_helpers;
 mod envelope;
 mod interpolation_tables;
 pub mod voice;

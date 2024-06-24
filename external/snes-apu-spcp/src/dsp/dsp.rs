@@ -27,6 +27,8 @@ pub struct Dsp {
 
     pub output_buffer: RingBuffer,
 
+    registers: [u8; 0x80],
+
     pub(super) master_volume: Stereo<u8>,
     pub(super) echo_volume: Stereo<u8>,
     pub(super) noise_clock: u8,
@@ -77,6 +79,8 @@ impl Dsp {
             voices: Vec::with_capacity(NUM_VOICES),
 
             output_buffer: RingBuffer::new(),
+
+            registers: [0u8; 0x80],
 
             master_volume: Stereo::default(),
             echo_volume: Stereo::default(),
@@ -528,9 +532,7 @@ impl Dsp {
             return;
         }
 
-        // if !self.is_flushing {
-        //     self.flush();
-        // }
+        self.registers[address as usize] = value;
 
         let voice_index = address >> 4;
         let voice_address = address & 0x0f;
@@ -564,7 +566,6 @@ impl Dsp {
                 0x7c => { self.set_endx(); },
 
                 0x0d => { self.echo_feedback = value; },
-
                 0x2d => { self.set_pmon(value); },
                 0x3d => { self.set_non(value); },
                 0x4d => { self.set_eon(value); },
@@ -578,10 +579,6 @@ impl Dsp {
     }
 
     pub fn get_register(&mut self, address: u8) -> u8 {
-        // if !self.is_flushing {
-        //     self.flush();
-        // }
-
         let voice_index = address >> 4;
         let voice_address = address & 0x0f;
         if voice_address < 0x0a {
@@ -620,7 +617,7 @@ impl Dsp {
                 0x6d => (self.l_echo_start_address >> 8) as u8,
                 0x7d => self.echo_delay,
 
-                _ => 0
+                _ => self.registers[address as usize]
             }
         }
     }

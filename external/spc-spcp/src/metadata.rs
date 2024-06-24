@@ -4,27 +4,27 @@ use crate::id666::Emulator;
 use crate::search_xid6;
 use crate::spc::Id666Tag;
 
-pub struct Metadata {
-    id6: Option<Id666Tag>,
-    xid6: Option<ExtendedId666Data>
+pub struct Metadata<'a> {
+    id6: Option<&'a Id666Tag>,
+    xid6: Option<&'a ExtendedId666Data>
 }
 
 macro_rules! standard_item_impl {
     ($name: ident, $xid6_chunk: ident, $ret: ty) => {
         pub fn $name(&self) -> Option<$ret> {
-            if let Some(xid6) = self.xid6.as_ref() {
+            if let Some(xid6) = self.xid6 {
                 if let Some(value) = search_xid6!(xid6, $xid6_chunk) {
                     return Some(value);
                 }
             }
 
-            Some(self.id6.as_ref()?.$name.clone())
+            Some(self.id6?.$name.clone())
         }
     };
 }
 
-impl Metadata {
-    pub fn new(id6: Option<Id666Tag>, xid6: Option<ExtendedId666Data>) -> Self {
+impl<'a> Metadata<'a> {
+    pub fn new(id6: Option<&'a Id666Tag>, xid6: Option<&'a ExtendedId666Data>) -> Self {
         Self {
             id6,
             xid6
@@ -41,14 +41,14 @@ impl Metadata {
     standard_item_impl!(muted_voices, MutedVoices, [bool; 8]);
 
     pub fn play_time(&self, loop_count: Option<u32>) -> Option<(Duration, Duration)> {
-        let mut play_time = self.xid6.as_ref()
+        let mut play_time = self.xid6
             .and_then(|xid6|  search_xid6!(xid6, IntroductionLength))
-            .or_else(|| self.id6.as_ref().map(|id6| id6.play_time))?;
-        let mut fadeout_time = self.xid6.as_ref()
+            .or_else(|| self.id6.map(|id6| id6.play_time))?;
+        let mut fadeout_time = self.xid6
             .and_then(|xid6|  search_xid6!(xid6, FadeoutLength))
-            .or_else(|| self.id6.as_ref().map(|id6| id6.fadeout_time))?;
+            .or_else(|| self.id6.map(|id6| id6.fadeout_time))?;
 
-        if let Some(xid6) = self.xid6.as_ref() {
+        if let Some(xid6) = self.xid6 {
             if let Some(loop_time) = search_xid6!(xid6, LoopLength) {
                 let loop_count = loop_count
                     .or_else(|| search_xid6!(xid6, PreferredLoopCount).map(|count| count as u32))
@@ -66,7 +66,7 @@ impl Metadata {
     }
 
     pub fn ost_info(&self) -> Option<OstInfo> {
-        let xid6 = self.xid6.as_ref()?;
+        let xid6 = self.xid6?;
         let title = search_xid6!(xid6, OstTitle)?;
         let disc = search_xid6!(xid6, OstDisc).unwrap_or(1);
         let track = search_xid6!(xid6, OstTrack)?;

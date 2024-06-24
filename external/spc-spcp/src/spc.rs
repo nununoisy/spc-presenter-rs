@@ -12,6 +12,7 @@ macro_rules! fail {
 }
 
 pub(crate) use fail;
+use crate::metadata::Metadata;
 
 pub const RAM_LEN: usize = 0x10000;
 pub const REG_LEN: usize = 128;
@@ -31,6 +32,7 @@ pub struct Spc {
     pub psw: u8,
     pub sp: u8,
     pub id666_tag: Option<Id666Tag>,
+    pub extended_id666: Option<ExtendedId666Data>,
     pub ram: [u8; RAM_LEN],
     pub regs: [u8; REG_LEN],
     pub ipl_rom: [u8; IPL_ROM_LEN]
@@ -70,7 +72,7 @@ impl Spc {
         let psw = r.read_u8()?;
         let sp = r.read_u8()?;
 
-        let mut id666_tag = match has_id666_tag {
+        let id666_tag = match has_id666_tag {
             true => {
                 r.seek(SeekFrom::Start(0x2e))?;
                 match Id666Tag::load(&mut r) {
@@ -89,11 +91,7 @@ impl Spc {
         r.seek(SeekFrom::Start(0x101c0))?;
         let mut ipl_rom = [0; IPL_ROM_LEN];
         r.read_exact(&mut ipl_rom)?;
-        if let Ok(Some(extended_id666data)) = ExtendedId666Data::load(&mut r) {
-            if let Some(tag) = id666_tag.as_mut() {
-                extended_id666data.augment_id666_tag(tag);
-            }
-        }
+        let extended_id666 = ExtendedId666Data::load(&mut r).unwrap_or_else(|_| None);
 
         Ok(Spc {
             version_minor,
@@ -104,10 +102,15 @@ impl Spc {
             psw,
             sp,
             id666_tag,
+            extended_id666,
             ram,
             regs,
             ipl_rom
         })
+    }
+
+    pub fn metadata(&self) -> Metadata {
+        Metadata::new(self.id666_tag.as_ref(), self.extended_id666.as_ref())
     }
 }
 

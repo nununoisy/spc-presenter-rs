@@ -6,6 +6,7 @@ use crate::timer::Timer;
 use crate::dsp::dsp::Dsp;
 use crate::script700::runtime::Runtime;
 use spc_spcp::spc::{Spc, RAM_LEN, IPL_ROM_LEN};
+use crate::blargg_spc_filter::BlarggSpcFilter;
 use crate::ResamplingMode;
 
 #[derive(Copy, Clone, Default, Debug)]
@@ -63,7 +64,10 @@ pub struct Apu {
     timer2: Timer<16>,
 
     is_ipl_rom_enabled: bool,
-    dsp_reg_address: u8
+    dsp_reg_address: u8,
+
+    output_filter: BlarggSpcFilter,
+    output_filter_enabled: bool
 }
 
 impl Apu {
@@ -82,13 +86,20 @@ impl Apu {
             timer2: Timer::new(),
 
             is_ipl_rom_enabled: true,
-            dsp_reg_address: 0
+            dsp_reg_address: 0,
+
+            output_filter: BlarggSpcFilter::default(),
+            output_filter_enabled: true
         });
         let ret_ptr = &mut *ret as *mut _;
         ret.smp = Some(Box::new(Smp::new(ret_ptr)));
         ret.dsp = Some(Dsp::new(ret_ptr));
         ret.script700_runtime = Some(Runtime::new(ret_ptr));
         ret
+    }
+
+    pub fn set_output_filter_enabled(&mut self, enabled: bool) {
+        self.output_filter_enabled = enabled;
     }
 
     pub fn read_spc(&mut self, spc: &Spc) {
@@ -150,6 +161,10 @@ impl Apu {
         }
 
         dsp.output_buffer.read(left_buffer, right_buffer, num_samples);
+        if self.output_filter_enabled {
+            self.output_filter.run(left_buffer, 0);
+            self.output_filter.run(right_buffer, 1);
+        }
     }
 
     pub fn cpu_cycles_callback(&mut self, num_cycles: i32) {

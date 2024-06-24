@@ -311,7 +311,7 @@ impl Voice {
         if self.sample_pos >= 0x4000 {
             self.decode_brr_samples();
 
-            if self.brr_decoder.is_finished() {
+            if self.brr_decoder.is_finished() || self.sample_offset >= 7 {
                 if self.brr_decoder.is_end {
                     self.sample_address = self.next_sample_address;
                     self.edge_hit = true;
@@ -429,6 +429,7 @@ impl Voice {
 
     pub fn clear_endx_bit(&mut self) {
         self.endx_bit = false;
+        self.l_endx_bit = false;
     }
 
     pub fn tick_latches(&mut self) {

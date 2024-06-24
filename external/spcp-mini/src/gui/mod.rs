@@ -231,33 +231,35 @@ pub fn run() {
             }
             drop(audio_manager);
 
-            if let Some(emulator_state) = source.apu_state() {
-                let apu_channel_states = main_window_weak.unwrap().get_apu_channel_states();
-                for (i, state) in emulator_state.iter().enumerate() {
-                    apu_channel_states.set_row_data(i, SlintApuChannelState {
-                        echo_on: state.echo_delay.is_some(),
-                        envelope: state.envelope_level,
-                        noise_on: state.noise_clock.is_some(),
-                        output_left: state.amplitude.0,
-                        output_right: state.amplitude.1,
-                        pitch: state.pitch as i32,
-                        pitch_modulation_on: state.pitch_modulation,
-                        volume_left: state.volume.0 as i32,
-                        volume_right: state.volume.1 as i32,
-                    });
-                }
-                {
-                    let state = emulator_state.master();
-                    main_window_weak.unwrap().set_apu_master_state(SlintApuMasterState {
-                        master_volume_left: state.master_volume.0 as i32,
-                        master_volume_right: state.master_volume.1 as i32,
-                        echo_volume_left: state.echo_volume.0 as i32,
-                        echo_volume_right: state.echo_volume.1 as i32,
-                        echo_delay: state.echo_delay as i32,
-                        echo_feedback: state.echo_feedback as i32,
-                        output_left: state.amplitude.0,
-                        output_right: state.amplitude.1
-                    });
+            if main_window_weak.unwrap().window().is_visible() {
+                if let Some(emulator_state) = source.apu_state() {
+                    let apu_channel_states = main_window_weak.unwrap().get_apu_channel_states();
+                    for (i, state) in emulator_state.iter().enumerate() {
+                        apu_channel_states.set_row_data(i, SlintApuChannelState {
+                            echo_on: state.echo_delay.is_some(),
+                            envelope: state.envelope_level,
+                            noise_on: state.noise_clock.is_some(),
+                            output_left: state.amplitude.0,
+                            output_right: state.amplitude.1,
+                            pitch: state.pitch as i32,
+                            pitch_modulation_on: state.pitch_modulation,
+                            volume_left: state.volume.0 as i32,
+                            volume_right: state.volume.1 as i32,
+                        });
+                    }
+                    {
+                        let state = emulator_state.master();
+                        main_window_weak.unwrap().set_apu_master_state(SlintApuMasterState {
+                            master_volume_left: state.master_volume.0 as i32,
+                            master_volume_right: state.master_volume.1 as i32,
+                            echo_volume_left: state.echo_volume.0 as i32,
+                            echo_volume_right: state.echo_volume.1 as i32,
+                            echo_delay: state.echo_delay as i32,
+                            echo_feedback: state.echo_feedback as i32,
+                            output_left: state.amplitude.0,
+                            output_right: state.amplitude.1
+                        });
+                    }
                 }
             }
 
