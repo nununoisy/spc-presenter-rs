@@ -133,19 +133,25 @@ pub fn run() {
                 Some(path) => path,
                 None => return
             };
-            if let Some(metadata) = emulator.load_spc(spc_path) {
-                main_window_weak.unwrap().set_spc_title(metadata.song_title.clone().into());
-                main_window_weak.unwrap().set_spc_artist(metadata.artist_name.clone().into());
-                main_window_weak.unwrap().set_spc_game(metadata.game_title.clone().into());
-                main_window_weak.unwrap().set_spc_ripper(metadata.dumper_name.clone().into());
-                main_window_weak.unwrap().set_spc_duration(metadata.play_time.as_millis() as i64);
-                main_window_weak.unwrap().set_spc_fadeout(metadata.fadeout_time.as_millis() as i64);
+            if let Some(spc) = emulator.load_spc(spc_path) {
+                let metadata = spc.metadata();
+
+                main_window_weak.unwrap().set_spc_title(metadata.song_title().unwrap_or_default().into());
+                main_window_weak.unwrap().set_spc_artist(metadata.artist_name().unwrap_or_default().into());
+                main_window_weak.unwrap().set_spc_game(metadata.game_title().unwrap_or_default().into());
+                main_window_weak.unwrap().set_spc_ripper(metadata.dumper_name().unwrap_or_default().into());
+
+                let (play_time, fadeout_time) = metadata.play_time(None)
+                    .unwrap_or((Duration::from_secs(300), Duration::from_secs(10)));
+
+                main_window_weak.unwrap().set_spc_duration(play_time.as_millis() as i64);
+                main_window_weak.unwrap().set_spc_fadeout(fadeout_time.as_millis() as i64);
 
                 controls.lock().unwrap().set_metadata(MediaMetadata {
-                    title: Some(&metadata.song_title),
-                    artist: Some(&metadata.artist_name),
-                    album: Some(&metadata.game_title),
-                    duration: Some(metadata.play_time + metadata.fadeout_time),
+                    title: Some(metadata.song_title().unwrap_or_default().as_str()),
+                    artist: Some(metadata.artist_name().unwrap_or_default().as_str()),
+                    album: Some(metadata.game_title().unwrap_or_default().as_str()),
+                    duration: Some(play_time + fadeout_time),
                     ..Default::default()
                 }).unwrap();
             } else {

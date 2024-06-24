@@ -144,11 +144,10 @@ impl Emulator {
         EmulatorSource::new(self.buffered_audio.clone(), self.buffered_states.clone(), self.seek_position.clone())
     }
 
-    pub fn load_spc<P: AsRef<Path>>(&mut self, spc_path: P) -> Option<Id666Tag> {
+    pub fn load_spc<P: AsRef<Path>>(&mut self, spc_path: P) -> Option<Box<Spc>> {
         let spc = Box::new(Spc::load(&spc_path).ok()?);
-        let result = spc.id666_tag.clone();
-        self.channel_tx.send(EmulatorThreadMessage::LoadSpc(spc, search_for_script700_file(&spc_path))).unwrap();
-        result
+        self.channel_tx.send(EmulatorThreadMessage::LoadSpc(spc.clone(), search_for_script700_file(&spc_path))).unwrap();
+        Some(spc)
     }
 }
 
