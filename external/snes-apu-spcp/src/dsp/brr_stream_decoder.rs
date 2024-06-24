@@ -8,6 +8,7 @@ pub struct BrrStreamDecoder {
     samples: [i16; 16],
     decode_pos: usize,
 
+    first_byte: u8,
     sample_index: i32,
     last_sample: i16,
     last_last_sample: i16
@@ -23,6 +24,7 @@ impl BrrStreamDecoder {
             samples: [0; 16],
             decode_pos: 0,
 
+            first_byte: 0,
             sample_index: 0,
             last_sample: 0,
             last_last_sample: 0
@@ -36,14 +38,18 @@ impl BrrStreamDecoder {
         self.shift = raw_header >> 4;
     }
 
+    pub fn read_first_byte(&mut self, first_byte: u8) {
+        self.first_byte = first_byte;
+    }
+
     pub fn reset(&mut self) {
         self.sample_index = 0;
         self.decode_pos = 0;
     }
 
-    pub fn read(&mut self, buf: &[u8]) {
-        let mut nybbles = buf[0] as i32;
-        nybbles = (nybbles << 8) | (buf[1] as i32);
+    pub fn read(&mut self, second_byte: u8) {
+        let mut nybbles = self.first_byte as i32;
+        nybbles = (nybbles << 8) | (second_byte as i32);
 
         for _ in 0..4 {
             let mut sample = dsp_helpers::cast_arb_int(nybbles, 16) >> 12;

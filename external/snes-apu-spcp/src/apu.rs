@@ -58,7 +58,9 @@ pub struct Apu {
     pub(crate) dsp: Option<Box<Dsp>>,
     pub(crate) script700_runtime: Option<Box<Runtime>>,
 
-    timers: [Timer; 3],
+    timer0: Timer<128>,
+    timer1: Timer<128>,
+    timer2: Timer<16>,
 
     is_ipl_rom_enabled: bool,
     dsp_reg_address: u8
@@ -75,7 +77,9 @@ impl Apu {
             dsp: None,
             script700_runtime: None,
 
-            timers: [Timer::new(256), Timer::new(256), Timer::new(32)],
+            timer0: Timer::new(),
+            timer1: Timer::new(),
+            timer2: Timer::new(),
 
             is_ipl_rom_enabled: true,
             dsp_reg_address: 0
@@ -107,10 +111,10 @@ impl Apu {
 
         self.dsp.as_mut().unwrap().set_state(spc);
 
-        for i in 0..3 {
-            let target = self.ram[0xfa + i];
-            self.timers[i].set_target(target);
-        }
+        self.timer0.set_target(self.ram[0xfa]);
+        self.timer1.set_target(self.ram[0xfb]);
+        self.timer2.set_target(self.ram[0xfc]);
+
         let control_reg = self.ram[0xf1];
         self.set_control_reg(control_reg);
 
@@ -142,19 +146,18 @@ impl Apu {
         let smp = self.smp.as_mut().unwrap();
         let dsp = self.dsp.as_mut().unwrap();
         while dsp.output_buffer.get_sample_count() < num_samples {
-            smp.run(num_samples * 64);
-            dsp.flush();
+            smp.run(64);
         }
 
         dsp.output_buffer.read(left_buffer, right_buffer, num_samples);
     }
 
     pub fn cpu_cycles_callback(&mut self, num_cycles: i32) {
-        self.script700_runtime.as_mut().unwrap().cycles_callback(num_cycles);
+        self.timer0.cpu_cycles_callback(num_cycles);
+        self.timer1.cpu_cycles_callback(num_cycles);
+        self.timer2.cpu_cycles_callback(num_cycles);
         self.dsp.as_mut().unwrap().cycles_callback(num_cycles);
-        for timer in self.timers.iter_mut() {
-            timer.cpu_cycles_callback(num_cycles);
-        }
+        self.script700_runtime.as_mut().unwrap().cycles_callback(num_cycles);
     }
 
     pub fn read_u8(&mut self, address: u32) -> u8 {
@@ -172,9 +175,9 @@ impl Apu {
                 }
                 0xfa ..= 0xfc => 0,
 
-                0xfd => self.timers[0].read_counter(),
-                0xfe => self.timers[1].read_counter(),
-                0xff => self.timers[2].read_counter(),
+                0xfd => self.timer0.read(),
+                0xfe => self.timer1.read(),
+                0xff => self.timer2.read(),
 
                 _ => self.ram[address as usize]
             }
@@ -200,9 +203,9 @@ impl Apu {
                 },
                 0xf8 ..= 0xf9 => { self.ram[address as usize] = value; },
 
-                0xfa => { self.timers[0].set_target(value); },
-                0xfb => { self.timers[1].set_target(value); },
-                0xfc => { self.timers[2].set_target(value); },
+                0xfa => { self.timer0.set_target(value); },
+                0xfb => { self.timer1.set_target(value); },
+                0xfc => { self.timer2.set_target(value); },
 
                 _ => () // Do nothing
             }
@@ -233,6 +236,10 @@ impl Apu {
             let ir = self.read_u8(pc as u32);
             panic!("Test reg not implemented (pc=${:04x}, ir=${:02x}, echo_start=${:04x}, value=${:02x})", pc, ir, self.dsp.as_ref().unwrap().get_echo_start_address(), value);
         }
+
+        self.timer0.synchronize_stage1();
+        self.timer1.synchronize_stage1();
+        self.timer2.synchronize_stage1();
     }
 
     fn set_control_reg(&mut self, value: u8) {
@@ -245,9 +252,9 @@ impl Apu {
             self.ram[0xf4] = 0;
             self.ram[0xf5] = 0;
         }
-        self.timers[0].set_start_stop_bit((value & 0x01) != 0);
-        self.timers[1].set_start_stop_bit((value & 0x02) != 0);
-        self.timers[2].set_start_stop_bit((value & 0x04) != 0);
+        self.timer0.set_enable((value & 0x01) != 0, false);
+        self.timer1.set_enable((value & 0x02) != 0, false);
+        self.timer2.set_enable((value & 0x04) != 0, true);
     }
 
     pub fn set_resampling_mode(&mut self, resampling_mode: ResamplingMode) {

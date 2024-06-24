@@ -30,7 +30,7 @@ video.
     - Support for importing files is planned.
     - Compatible with Script700 exports from the C700 VST.
   - Support for songs that require 5A22/65816 emulation (SMC/SNSF) is planned.
-- Based on a custom fork of snes-apu with a much more accurate S-DSP:
+- Based on a custom fork of snes-apu with a cycle-accurate S-DSP:
   - Reorders operations to more closely match a cycle-accurate implementation.
   - Properly emulates internal register sizes and wraps/clamps values accurately.
   - Implements all S-DSP register reads and writes, many of which were previously missing.
@@ -38,8 +38,6 @@ video.
   - Reimplements the BRR decoder to properly decode 4 samples at a time.
   - Added hardware-accurate sample interpolation.
   - Correctly mixes negative channel volumes (SNES "surround").
-  - Remaining inaccuracies:
-    - S-DSP is not yet cycle-accurate. It instead runs in 64 SMP-clock periods.
 - Automatic BRR sample analysis:
   - Rips samples from the S-DSP as the song plays.
   - Samples are tuned using a custom implementation of the pYIN pitch detection

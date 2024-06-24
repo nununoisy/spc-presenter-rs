@@ -11,7 +11,6 @@ pub struct Envelope {
     dsp: *mut Dsp,
 
     pub l_adsr0: u8,
-    pub adsr0: u8,
     pub adsr1: u8,
     pub gain: u8,
 
@@ -23,10 +22,9 @@ pub struct Envelope {
 impl Envelope {
     pub fn new(dsp: *mut Dsp) -> Envelope {
         Envelope {
-            dsp: dsp,
+            dsp,
 
             l_adsr0: 0,
-            adsr0: 0,
             adsr1: 0,
             gain: 0,
 
@@ -51,14 +49,12 @@ impl Envelope {
         self.mode = Mode::Release;
     }
 
-    pub fn kon_delay_tick(&mut self) {
+    pub fn reset_level(&mut self) {
         self.level = 0;
         self.hidden_level = 0;
     }
 
-    pub fn tick(&mut self) {
-        self.adsr0 = self.l_adsr0;
-
+    pub fn tick(&mut self, adsr0: u8) {
         let mut env = self.level;
         if let Mode::Release = self.mode {
             self.level = (env - 8).max(0);
@@ -67,12 +63,12 @@ impl Envelope {
 
         let rate: i32;
         let env_data: i32;
-        if (self.adsr0 & 0x80) != 0 {
+        if (adsr0 & 0x80) != 0 {
             // ADSR mode
             env_data = self.adsr1 as i32;
             match self.mode {
                 Mode::Attack => {
-                    rate = ((self.adsr0 as i32) & 0x0f) * 2 + 1;
+                    rate = ((adsr0 as i32) & 0x0f) * 2 + 1;
                     env += if rate < 31 { 0x20 } else { 0x400 };
                 },
                 _ => {
@@ -80,7 +76,7 @@ impl Envelope {
                     env -= env >> 8;
                     match self.mode {
                         Mode::Decay => {
-                            rate = (((self.adsr0 as i32) >> 3) & 0x0e) + 0x10;
+                            rate = (((adsr0 as i32) >> 3) & 0x0e) + 0x10;
                         },
                         _ => {
                             rate = env_data & 0x1f;
