@@ -1,0 +1,60 @@
+import { Palette } from "std-widgets.slint";
+
+export component FluentCard {
+    in property <int> n: 2;
+    in property <brush> background: Palette.control-background;
+    in property <length> border-radius: 4px;
+
+    property <bool> high-elevation: n > 16;
+    property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+    property <bool> use-luma: background != Palette.control-background;
+
+    property <float> shadow1-opacity: use-luma
+        ? (round(42 - 0.116 * luminosity(background)) / 100)
+        : (dark ? 0.28 : (high-elevation ? 0.24 : 0.14));
+    property <float> shadow2-opacity: use-luma
+        ? (round(34 - 0.09 * luminosity(background)) / 100)
+        : (high-elevation ? 0.20 : 0.14);
+
+    pure function luminosity(c: color) -> float {
+        (0.2126 * (c.red / 255)) + (0.7152 * (c.green / 255)) + (0.0722 * (c.blue / 255))
+    }
+
+    i-shadow-1 := Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        border-radius: root.border-radius;
+
+        drop-shadow-blur: 1px * n;
+        drop-shadow-offset-x: 0;
+        drop-shadow-offset-y: 1px * (n / 2);
+        drop-shadow-color: black.with-alpha(shadow1-opacity);
+    }
+
+    i-shadow-2 := Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        border-radius: root.border-radius;
+        background: Palette.background;
+
+        drop-shadow-blur: high-elevation ? (dark ? 2px : 8px) : 1px * n;
+        drop-shadow-offset-x: 0;
+        drop-shadow-offset-y: high-elevation ? 0 : 1px * (n / 2);
+        drop-shadow-color: black.with-alpha(shadow2-opacity);
+    }
+
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        border-radius: root.border-radius;
+        background: root.background;
+    }
+
+    @children
+}

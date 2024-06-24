@@ -1,0 +1,93 @@
+component WindowsWindowButton {
+    width: 46px;
+    height: 32px;
+
+    in property <image> icon;
+    in property <bool> close: false;
+    in property <bool> enabled: true;
+    in property <bool> active: true;
+    out property <bool> has-hover: i-touch-area.has-hover;
+
+    callback clicked <=> i-touch-area.clicked;
+
+    i-base := Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        background: transparent;
+    }
+
+    i-icon := Image {
+        x: 15px;
+        y: 8px;
+        width: 16px;
+        height: 16px;
+        source: icon;
+        colorize: #ffffff;
+    }
+
+    i-touch-area := TouchArea {
+        x: 0;
+        y: 0;
+        width: 46px;
+        height: 32px;
+        enabled: root.enabled;
+    }
+
+    states [
+        inactive when !enabled || !active: {
+            i-icon.colorize: #ffffff5d;
+        }
+        pressed-closed when i-touch-area.pressed && close: {
+            i-base.background: #c42b1ce6;
+            i-icon.colorize: #ffffffb3;
+        }
+        pressed when i-touch-area.pressed: {
+            i-base.background: #ffffff0b;
+            i-icon.colorize: #ffffff8b;
+        }
+        hovered-closed when has-hover && close: {
+            i-base.background: #c42b1c;
+        }
+        hovered when has-hover: {
+            i-base.background: #ffffff0f;
+        }
+    ]
+}
+
+export component WindowsWindowControls {
+    in property <bool> maximized: false;
+    in property <bool> minimize-enabled: true;
+    in property <bool> maximize-enabled: true;
+    in property <bool> close-enabled: true;
+    in property <bool> active: true;
+    out property <bool> has-hover: i-minimize-button.has-hover || i-maximize-button.has-hover || i-close-button.has-hover;
+
+    callback minimize-pressed <=> i-minimize-button.clicked;
+    callback maximize-pressed <=> i-maximize-button.clicked;
+    callback close-pressed <=> i-close-button.clicked;
+
+    width: 138px;
+    height: 32px;
+
+    i-minimize-button := WindowsWindowButton {
+        x: 0;
+        icon: @image-url("win-minimize.svg");
+        enabled: root.minimize-enabled;
+        active: root.active;
+    }
+    i-maximize-button := WindowsWindowButton {
+        x: 46px;
+        icon: maximized ? @image-url("win-restore.svg") : @image-url("win-maximize.svg");
+        enabled: root.maximize-enabled;
+        active: root.active;
+    }
+    i-close-button := WindowsWindowButton {
+        x: 92px;
+        close: true;
+        icon: @image-url("win-close.svg");
+        enabled: root.close-enabled;
+        active: root.active;
+    }
+}

@@ -65,23 +65,27 @@ export component ApuChannelStateView {
 
             Text {
                 text: channel + 1;
+                font-size: 16px;
                 horizontal-stretch: 0;
             }
             Rectangle {}
             Text {
                 text: "E";
+                font-size: 16px;
                 color: #00cc00;
                 horizontal-stretch: 0;
                 opacity: root.state.echo-on ? 1 : 0;
             }
             Text {
                 text: "P";
+                font-size: 16px;
                 color: #0066ff;
                 horizontal-stretch: 0;
                 opacity: root.state.pitch-modulation-on ? 1 : 0;
             }
             Text {
                 text: "N";
+                font-size: 16px;
                 color: #ff9900;
                 horizontal-stretch: 0;
                 opacity: root.state.noise-on ? 1 : 0;
@@ -150,6 +154,7 @@ export component ApuMasterStateView {
 
         Text {
             text: "Mixer";
+            font-size: 16px;
             horizontal-alignment: center;
             vertical-stretch: 0;
         }

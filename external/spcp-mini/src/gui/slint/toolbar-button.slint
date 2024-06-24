@@ -1,3 +1,5 @@
+import { Palette } from "std-widgets.slint";
+
 export enum TooltipPosition {
     top,
     bottom
@@ -10,6 +12,9 @@ export component ToolbarButton {
     in property <TooltipPosition> tooltip-position: bottom;
     in property <bool> enabled: true;
     in property <bool> destructive: false;
+    in property <bool> checkable: false;
+    in-out property <bool> checked: false;
+    out property <bool> has-hover: i-touch-area.has-hover;
 
     callback clicked();
 
@@ -22,7 +27,7 @@ export component ToolbarButton {
         height: i-tooltip-text.height + 16px;
         opacity: 0;
 
-        background: #2c2c2cff;
+        background: #2c2c2c;
         border-radius: 3px;
         drop-shadow-color: black;
         drop-shadow-blur: 4px;
@@ -30,6 +35,7 @@ export component ToolbarButton {
 
         i-tooltip-text := Text {
             text: root.tooltip;
+            color: #ffffff;
             horizontal-alignment: center;
         }
     }
@@ -45,6 +51,9 @@ export component ToolbarButton {
         i-touch-area := TouchArea {
             clicked => {
                 if (root.enabled) {
+                    if (root.checkable) {
+                        root.checked = !root.checked;
+                    }
                     root.clicked();
                 }
             }
@@ -61,7 +70,7 @@ export component ToolbarButton {
                     i-icon := Image {
                         width: 20px;
                         source: root.icon;
-                        colorize: white;
+                        colorize: #ffffff;
                         animate colorize {
                             duration: 100ms;
                             easing: ease-in-out;
@@ -74,7 +83,7 @@ export component ToolbarButton {
                 i-text := Text {
                     vertical-alignment: center;
                     text: root.text;
-                    color: white;
+                    color: #ffffff;
                     animate color {
                         duration: 100ms;
                         easing: ease-in-out;
@@ -88,17 +97,49 @@ export component ToolbarButton {
     }
 
     states [
+        disabled-checked when !root.enabled && root.checked: {
+            i-base.background: root.destructive ? #832023 : #438FB2;
+            i-icon.colorize: root.destructive ? #ffffff87 : #00000087;
+            i-text.color: root.destructive ? #ffffff87 : #00000087;
+            i-tooltip.opacity: 0;
+        }
         disabled when !root.enabled: {
             i-base.background: transparent;
             i-icon.colorize: #FFFFFF87;
             i-text.color: #FFFFFF87;
             i-tooltip.opacity: 0;
         }
+        clicked-checked when i-touch-area.pressed && root.checked: {
+            i-base.background: root.destructive ? #962528 : #4CA4CC;
+            i-icon.colorize: root.destructive ? #ffffff : #000000;
+            i-text.color: root.destructive ? #ffffff : #000000;
+            i-tooltip.opacity: root.tooltip != "" ? 1 : 0;
+        }
         clicked when i-touch-area.pressed: {
             i-base.background: #FFFFFF0F;
             i-icon.colorize: root.destructive ? #bc2f32 : #60cdff;
             i-text.color: root.destructive ? #bc2f32 : #60cdff;
             i-tooltip.opacity: root.tooltip != "" ? 1 : 0;
+        }
+        hovered-checked when i-touch-area.has-hover && root.checked: {
+            i-base.background: root.destructive ? #a92a2d : #56b8e5;
+            i-icon.colorize: root.destructive ? #ffffff : #000000;
+            i-text.color: root.destructive ? #ffffff : #000000;
+            i-tooltip.opacity: root.tooltip != "" ? 1 : 0;
+
+            in {
+                animate i-tooltip.opacity {
+                    duration: 200ms;
+                    delay: 300ms;
+                    easing: ease-in-out;
+                }
+            }
+            out {
+                animate i-tooltip.opacity {
+                    duration: 150ms;
+                    easing: ease-in-out;
+                }
+            }
         }
         hovered when i-touch-area.has-hover: {
             i-base.background: #FFFFFF1F;
@@ -119,6 +160,11 @@ export component ToolbarButton {
                     easing: ease-in-out;
                 }
             }
+        }
+        checked when root.checked: {
+            i-base.background: root.destructive ? #bc2f32 : #60cdff;
+            i-icon.colorize: root.destructive ? #ffffff : #000000;
+            i-text.color: root.destructive ? #ffffff : #000000;
         }
     ]
 }

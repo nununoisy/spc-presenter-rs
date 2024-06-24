@@ -16,6 +16,7 @@ component SeekBarBase {
     out property <bool> handle-pressed;
     in-out property <float> value: minimum;
 
+    callback hovered();
     callback changed(/* value */ float);
     callback released(/* value */ float);
 
@@ -30,6 +31,8 @@ component SeekBarBase {
         height: 100%;
 
         pointer-event(event) => {
+            root.hovered();
+
             if (event.button != PointerEventButton.left) {
                 return;
             }
@@ -120,7 +123,9 @@ export component SeekBar {
     out property <bool> has-focus: i-base.has-focus;
     in-out property <float> value <=> i-base.value;
     in property <float> buffer-length: i-base.minimum;
+    out property <bool> has-hover: i-base.has-hover;
 
+    callback hovered <=> i-base.hovered;
     callback changed <=> i-base.changed;
     callback released <=> i-base.released;
 
