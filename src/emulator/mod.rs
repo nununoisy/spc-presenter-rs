@@ -1,5 +1,4 @@
 mod resampler;
-mod filter;
 mod brr_sample;
 
 use anyhow::Result;
@@ -25,9 +24,7 @@ pub struct Emulator {
     frame_count: usize,
     frame_delay: usize,
     sample_buffer: VecDeque<i16>,
-    resampler: resampler::Resampler,
-    filter: filter::BlarggSpcFilter,
-    filter_enabled: bool
+    resampler: resampler::Resampler
 }
 
 impl Emulator {
@@ -41,9 +38,7 @@ impl Emulator {
             frame_count: 0,
             frame_delay: 0,
             sample_buffer: VecDeque::new(),
-            resampler: resampler::Resampler::new(sample_rate)?,
-            filter: filter::BlarggSpcFilter::default(),
-            filter_enabled: false
+            resampler: resampler::Resampler::new(sample_rate)?
         })
     }
 
@@ -53,7 +48,6 @@ impl Emulator {
 
     pub fn init(&mut self) {
         self.apu.clear_echo_buffer();
-        self.filter.clear();
     }
 
     pub fn step(&mut self) -> Result<()> {
@@ -66,9 +60,6 @@ impl Emulator {
         }
 
         let mut combined_sample_buffer = self.resampler.run(&l_sample_buffer, &r_sample_buffer)?;
-        if self.filter_enabled {
-            self.filter.run(&mut combined_sample_buffer);
-        }
         self.sample_buffer.extend(combined_sample_buffer.iter());
 
         self.frame_count += 1;
@@ -106,7 +97,7 @@ impl Emulator {
     }
 
     pub fn set_filter_enabled(&mut self, filter_enabled: bool) {
-        self.filter_enabled = filter_enabled;
+        self.apu.set_output_filter_enabled(filter_enabled);
     }
 
     pub fn get_spc_metadata(&self) -> Option<SpcMetadata> {
