@@ -2,7 +2,7 @@ use std::io::{Read, Result, Error, ErrorKind, Seek, SeekFrom, BufReader};
 use std::path::Path;
 use std::fs::File;
 use super::binary_reader::{BinaryRead, BinaryReader};
-use crate::extended_id666::{ExtendedId666Chunk, ExtendedId666Data};
+use crate::extended_id666::ExtendedId666Data;
 pub use super::id666::{Emulator, Id666Tag};
 
 macro_rules! fail {

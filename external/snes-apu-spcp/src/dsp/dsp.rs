@@ -25,7 +25,7 @@ pub struct Dsp {
 
     pub voices: Vec<Box<Voice>>,
 
-    pub output_buffer: RingBuffer,
+    pub output_buffer: RingBuffer<BUFFER_LEN>,
 
     registers: [u8; 0x80],
 
@@ -127,15 +127,6 @@ impl Dsp {
         for _ in 0..NUM_VOICES {
             ret.voices.push(Box::new(Voice::new(ret_ptr, emulator, ResamplingMode::Accurate)));
         }
-        ret.set_filter_coefficient(0x00, 0x80);
-        ret.set_filter_coefficient(0x01, 0xff);
-        ret.set_filter_coefficient(0x02, 0x9a);
-        ret.set_filter_coefficient(0x03, 0xff);
-        ret.set_filter_coefficient(0x04, 0x67);
-        ret.set_filter_coefficient(0x05, 0xff);
-        ret.set_filter_coefficient(0x06, 0x0f);
-        ret.set_filter_coefficient(0x07, 0xff);
-        ret.set_resampling_mode(ResamplingMode::Accurate);
         ret
     }
 
@@ -144,14 +135,6 @@ impl Dsp {
         unsafe {
             &mut (*self.emulator)
         }
-    }
-
-    fn set_filter_coefficient(&mut self, index: i32, value: u8) {
-        self.fir[index as usize] = value;
-    }
-
-    fn get_filter_coefficient(&self, index: i32) -> u8 {
-        self.fir[index as usize]
     }
 
     pub fn resampling_mode(&self) -> ResamplingMode {
@@ -188,10 +171,6 @@ impl Dsp {
     pub fn cycles_callback(&mut self, num_cycles: i32) {
         for _ in 0..num_cycles {
             self.cycle_count = (self.cycle_count + 1) % 32;
-
-            // if (self.cycle_count % 2) != 0 {
-            //     continue;
-            // }
 
             match self.cycle_count {
                 0 => {
@@ -377,7 +356,7 @@ impl Dsp {
                     .unwrap()
                     .lock()
                     .unwrap()
-                    .receive(channel, state);
+                    .receive_channel(channel, state);
             }
 
             let state = ApuMasterState {
@@ -385,6 +364,13 @@ impl Dsp {
                 echo_volume: (*self.echo_volume.left() as i8, *self.echo_volume.right() as i8),
                 echo_delay: self.echo_delay,
                 echo_feedback: self.echo_feedback as i8,
+                master_reset: self.master_reset,
+                master_mute: self.master_mute,
+                echo_writes_enabled: self.echo_write_enabled,
+                noise_clock: self.noise_clock,
+                input_ports: self.emulator().ram[0xf4..0xf8].try_into().unwrap(),
+                output_ports: self.emulator().output_ports,
+                fir: self.fir,
                 amplitude: (self.master_output.into_inner_left(), self.master_output.into_inner_right()),
             };
 
@@ -405,133 +391,7 @@ impl Dsp {
         (self.echo_delay as i32) * 0x800
     }
 
-    // pub fn flush(&mut self) {
-    //     self.is_flushing = true;
-    //
-    //     while self.cycles_since_last_flush > 64 {
-    //         if !self.read_counter(self.noise_clock as i32) {
-    //             let feedback = (self.noise << 13) ^ (self.noise << 14);
-    //             self.noise = (feedback & 0x4000) ^ (self.noise >> 1);
-    //         }
-    //
-    //         let mut are_any_voices_solod = false;
-    //         for voice in self.voices.iter() {
-    //             if voice.is_solod {
-    //                 are_any_voices_solod = true;
-    //                 break;
-    //             }
-    //         }
-    //
-    //         let mut left_out = 0;
-    //         let mut right_out = 0;
-    //         let mut left_echo_out = 0;
-    //         let mut right_echo_out = 0;
-    //         let mut last_voice_out = 0;
-    //         for voice in self.voices.iter_mut() {
-    //             let output = voice.render_sample(last_voice_out, self.noise, are_any_voices_solod);
-    //
-    //             left_out = dsp_helpers::clamp(dsp_helpers::cast_arb_int(left_out + output.left_out, 17));
-    //             right_out = dsp_helpers::clamp(dsp_helpers::cast_arb_int(right_out + output.right_out, 17));
-    //
-    //             if voice.echo_on {
-    //                 left_echo_out = dsp_helpers::clamp(dsp_helpers::cast_arb_int(left_echo_out + output.left_out, 17));
-    //                 right_echo_out = dsp_helpers::clamp(dsp_helpers::cast_arb_int(right_echo_out + output.right_out, 17));
-    //             }
-    //
-    //             last_voice_out = ((output.last_voice_out & 0xFFFF) as i16) as i32;
-    //         }
-    //
-    //         left_out = dsp_helpers::multiply_volume(left_out, self.vol_left);
-    //         right_out = dsp_helpers::multiply_volume(right_out, self.vol_right);
-    //
-    //         let echo_address = (self.echo_start_address.wrapping_add(self.echo_pos as u16)) as u32;
-    //         // println!("ECHO_ADDR=${:04x} ECHO_LEN=${:04x} ESA=${:04x} EDL=${:02x}\n\n\n", echo_address, self.echo_length, self.echo_start_address, self.echo_delay);
-    //         let mut left_echo_in = ((((self.emulator().read_u8(echo_address + 1) as i32) << 8) | (self.emulator().read_u8(echo_address) as i32)) as i16) as i32;
-    //         let mut right_echo_in = ((((self.emulator().read_u8(echo_address + 3) as i32) << 8) | (self.emulator().read_u8(echo_address + 2) as i32)) as i16) as i32;
-    //
-    //         left_echo_in = dsp_helpers::clamp(self.left_filter.next(left_echo_in, false)) & !1;
-    //         right_echo_in = dsp_helpers::clamp(self.right_filter.next(right_echo_in, true)) & !1;
-    //
-    //         let left_out = dsp_helpers::clamp(dsp_helpers::cast_arb_int(left_out + dsp_helpers::multiply_volume(left_echo_in, self.echo_vol_left), 17)) as i16;
-    //         let right_out = dsp_helpers::clamp(dsp_helpers::cast_arb_int(right_out + dsp_helpers::multiply_volume(right_echo_in, self.echo_vol_right), 17)) as i16;
-    //         self.output_buffer.write_sample(left_out, right_out);
-    //
-    //         if self.echo_pos == 0 {
-    //             self.echo_length = self.calculate_echo_length();
-    //         }
-    //         self.echo_pos += 4;
-    //         if self.echo_pos >= self.echo_length {
-    //             self.echo_pos = 0;
-    //         }
-    //
-    //         if self.echo_write_enabled {
-    //             left_echo_out = dsp_helpers::clamp(dsp_helpers::cast_arb_int(left_echo_out + ((((left_echo_in * ((self.echo_feedback as i8) as i32)) >> 7) as i16) as i32), 17)) & !1;
-    //             right_echo_out = dsp_helpers::clamp(dsp_helpers::cast_arb_int(right_echo_out + ((((right_echo_in * ((self.echo_feedback as i8) as i32)) >> 7) as i16) as i32), 17)) & !1;
-    //
-    //             self.emulator().write_u8(echo_address + 0, left_echo_out as u8);
-    //             self.emulator().write_u8(echo_address + 1, (left_echo_out >> 8) as u8);
-    //             self.emulator().write_u8(echo_address + 2, right_echo_out as u8);
-    //             self.emulator().write_u8(echo_address + 3, (right_echo_out >> 8) as u8);
-    //         }
-    //
-    //         if self.counter == 0 {
-    //             self.counter = COUNTER_RANGE;
-    //         }
-    //         self.counter -= 1;
-    //         self.cycles_since_last_flush -= 64;
-    //
-    //         if self.state_receiver.is_some() {
-    //             for channel in 0..NUM_VOICES {
-    //                 let voice = self.voices.get_mut(channel).unwrap();
-    //
-    //                 let state = ApuChannelState {
-    //                     source: voice.source,
-    //                     muted: voice.is_muted,
-    //                     envelope_level: voice.envelope.level,
-    //                     volume: (*voice.volume.left() as i8, *voice.volume.right() as i8),
-    //                     amplitude: voice.amplitude,
-    //                     pitch: voice.pitch(),
-    //                     noise_clock: voice.noise_on.then_some(self.noise_clock),
-    //                     edge: voice.edge_detected(),
-    //                     kon_frames: voice.get_sample_frame(),
-    //                     sample_block_index: voice.sample_block_index,
-    //                     echo_delay: (self.echo_write_enabled && voice.echo_on).then_some(self.echo_delay),
-    //                     pitch_modulation: voice.pitch_mod
-    //                 };
-    //
-    //                 self.state_receiver
-    //                     .as_ref()
-    //                     .unwrap()
-    //                     .lock()
-    //                     .unwrap()
-    //                     .receive(channel, state);
-    //             }
-    //
-    //             let state = ApuMasterState {
-    //                 master_volume: (*self.master_volume.left() as i8, *self.master_volume.right() as i8),
-    //                 echo_volume: (*self.echo_volume.left() as i8, *self.echo_volume.right() as i8),
-    //                 echo_delay: self.echo_delay,
-    //                 echo_feedback: self.echo_feedback as i8,
-    //                 amplitude: (left_out as i32, right_out as i32),
-    //             };
-    //
-    //             self.state_receiver
-    //                 .as_ref()
-    //                 .unwrap()
-    //                 .lock()
-    //                 .unwrap()
-    //                 .receive_master(state);
-    //         }
-    //     }
-    //
-    //     self.is_flushing = false;
-    // }
-
     pub fn set_register(&mut self, address: u8, value: u8) {
-        if (address & 0x80) != 0 {
-            return;
-        }
-
         self.registers[address as usize] = value;
 
         let voice_index = address >> 4;
@@ -553,7 +413,7 @@ impl Dsp {
                 }
             }
         } else if voice_address == 0x0f {
-            self.set_filter_coefficient(voice_index as i32, value);
+            self.fir[voice_index as usize] = value;
         } else {
             match address {
                 0x0c => { self.master_volume.set_left(value); },
@@ -598,7 +458,7 @@ impl Dsp {
                 _ => unreachable!()
             }
         } else if voice_address == 0x0f {
-            self.get_filter_coefficient(voice_index as i32)
+            self.fir[voice_index as usize]
         } else {
             match address {
                 0x0c => self.master_volume.into_inner_left(),

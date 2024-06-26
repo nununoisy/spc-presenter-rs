@@ -2,6 +2,7 @@ import { VerticalBox, HorizontalBox, Button, Slider } from "std-widgets.slint";
 import { WindowsWindowControls } from "./window-controls.slint";
 import { ToolbarButton } from "./toolbar-button.slint";
 import { FluentCard } from "./fluent-card.slint";
+import { AudioDeviceSelector } from "./audio-device-selector.slint";
 import { SeekBar, BufferingSeekBar } from "./seek-bar.slint";
 import { SlintApuChannelState, ApuChannelStateView, SlintApuMasterState, ApuMasterStateView } from "./apu-state-view.slint";
 export { SlintApuChannelState, SlintApuMasterState }
@@ -24,6 +25,7 @@ export component MainWindow inherits Window {
     in property <[SlintApuChannelState]> apu-channel-states: [{}, {}, {}, {}, {}, {}, {}, {}];
 
     property <bool> i-seek-bar-hovered: false;
+    property <bool> i-selecting-device: false;
     property <bool> overlay-open: i-overlay-area.has-hover ||
                                   i-navigation-button.has-hover ||
                                   i-audio-select-button.has-hover ||
@@ -33,7 +35,8 @@ export component MainWindow inherits Window {
                                   i-export-button.has-hover ||
                                   i-open-button.has-hover ||
                                   i-window-controls.has-hover ||
-                                  i-seek-bar-hovered;
+                                  i-seek-bar-hovered ||
+                                  i-selecting-device;
     property <bool> buffering: playback-position > buffer-length;
     property <duration> seek-position: 0s;
     out property <bool> seeking: false;
@@ -41,12 +44,16 @@ export component MainWindow inherits Window {
     out property <bool> repeat-infinite: false;
     out property <duration> fadeout-start: repeat-infinite ? 0s : spc-duration;
     out property <duration> playback-duration: repeat-infinite ? 0s : fadeout-start + spc-fadeout;
+    in-out property <string> selected-device-name: "";
+    in property <bool> updating-device-names: true;
+    in property <[string]> device-names: [];
 
     callback init-audio();
     callback play-pause();
     callback open-spc();
     callback seek(duration);
     pure callback format-duration(duration) -> string;
+    pure callback update-devices();
 
     in property <bool> macos-layout: false;
     in property <bool> maximized: false;
@@ -117,6 +124,7 @@ export component MainWindow inherits Window {
             root.i-seek-bar-hovered = false;
 
             if (ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left) {
+                root.i-selecting-device = false;
                 if (resize-handle-hover-n || resize-handle-hover-e || resize-handle-hover-s || resize-handle-hover-w) {
                     root.start-window-resize(resize-handle-hover-n, resize-handle-hover-e, resize-handle-hover-s, resize-handle-hover-w);
                 } else {
@@ -265,6 +273,11 @@ export component MainWindow inherits Window {
                 i-audio-select-button := ToolbarButton {
                     width: self.height;
                     icon: @image-url("speaker-settings.svg");
+                    checkable: true;
+                    checked <=> root.i-selecting-device;
+                    clicked => {
+                        root.update-devices();
+                    }
                 }
                 Rectangle {}
                 i-restart-button := ToolbarButton {
@@ -308,6 +321,46 @@ export component MainWindow inherits Window {
                     clicked => {
                         root.open-spc();
                     }
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        property <length> i-y-animate-offset: i-selecting-device ? 0px : 16px;
+
+        x: 16px;
+        y: root.height - self.height - 60px + i-y-animate-offset;
+        z: 10;
+        height: 128px;
+        width: 232px;
+        opacity: root.i-selecting-device ? 1 : 0;
+
+        animate opacity, i-y-animate-offset {
+            duration: 200ms;
+            easing: ease-in-out;
+        }
+
+        FluentCard {
+            x: 0;
+            y: 0;
+            width: parent.width;
+            height: parent.height;
+            n: 8;
+
+            AudioDeviceSelector {
+                x: 16px;
+                y: 16px;
+                width: parent.width - 32px;
+                height: parent.height - 32px;
+                enabled: root.i-selecting-device;
+
+                updating: root.updating-device-names;
+                device-names: root.device-names;
+                selected-device-name <=> root.selected-device-name;
+                selected => {
+                    i-selecting-device = false;
+                    root.init-audio();
                 }
             }
         }

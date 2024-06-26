@@ -172,7 +172,7 @@ impl SampleDetector {
 }
 
 impl ApuStateReceiver for SampleDetector {
-    fn receive(&mut self, _channel: usize, state: ApuChannelState) {
+    fn receive_channel(&mut self, _channel: usize, state: ApuChannelState) {
         if state.muted || (state.volume.0 == 0 && state.volume.1 == 0 && state.amplitude.0 == 0 && state.amplitude.1 == 0) {
             return;
         }
@@ -185,8 +185,6 @@ impl ApuStateReceiver for SampleDetector {
             })
             .or_insert(state.sample_block_index + 1);
     }
-
-    fn receive_master(&mut self, _state: ApuMasterState) {}
 }
 
 pub struct SampleProcessor {

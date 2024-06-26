@@ -1,8 +1,8 @@
 use std::char;
-use std::io::{Read, Result, Error, ErrorKind, Seek, SeekFrom, BufReader};
+use std::io::{Result, Error, ErrorKind, Seek, SeekFrom};
 use std::time::Duration;
 use super::spc::fail;
-use super::binary_reader::{BinaryRead, BinaryReader};
+use super::binary_reader::BinaryRead;
 
 const DEFAULT_PLAY_TIME_SEC: i32 = 120;
 const DEFAULT_FADEOUT_TIME_MS: i32 = 10000;

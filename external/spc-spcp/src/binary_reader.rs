@@ -1,4 +1,4 @@
-use std::io::{Result, Read, Seek, SeekFrom, ErrorKind};
+use std::io::{Result, Read, Seek, SeekFrom};
 use super::string_decoder::decode_string;
 
 pub trait BinaryRead : Read {
@@ -6,7 +6,6 @@ pub trait BinaryRead : Read {
     fn read_le_u16(&mut self) -> Result<u16>;
     fn read_le_u32(&mut self) -> Result<u32>;
     fn read_string(&mut self, len: i32) -> Result<String>;
-    fn read_variadic_string(&mut self, max_len: i32) -> Result<String>;
 }
 
 pub struct BinaryReader<R> {
@@ -61,17 +60,5 @@ impl<R: Read> BinaryRead for BinaryReader<R> {
             .unwrap_or(string_bytes.len());
 
         decode_string(&string_bytes[..end])
-    }
-
-    fn read_variadic_string(&mut self, max_len: i32) -> Result<String> {
-        let string_bytes = (0..max_len)
-            .map(|_| self.read_u8())
-            .take_while(|r|  match r {
-                Ok(0) => false,
-                _ => true
-            })
-            .collect::<Result<Vec<u8>>>()?;
-
-        decode_string(&string_bytes)
     }
 }

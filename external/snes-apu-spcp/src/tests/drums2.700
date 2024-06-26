@@ -5,7 +5,8 @@ m #57000 w0
 bra 100
 
 ; Enable Yoshi drums
-m #0x02 i1 ; Write $02 to port 1
+c #0x02 #1
+m #? i? ; Write $02 to port 1
 
 ; End
 q

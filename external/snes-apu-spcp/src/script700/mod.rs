@@ -2,6 +2,7 @@ pub mod lexer;
 pub mod parser;
 pub mod runtime;
 pub mod context;
+pub(crate) mod tokenizer;
 
 use std::path::{Path, PathBuf};
 

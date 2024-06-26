@@ -31,12 +31,54 @@ pub struct ApuMasterState {
     pub echo_volume: (i8, i8),
     pub echo_delay: u8,
     pub echo_feedback: i8,
+    pub master_reset: bool,
+    pub master_mute: bool,
+    pub echo_writes_enabled: bool,
+    pub noise_clock: u8,
+    pub fir: [u8; 8],
+    pub input_ports: [u8; 4],
+    pub output_ports: [u8; 4],
     pub amplitude: (i32, i32)
 }
 
+#[derive(Copy, Clone, Default, Debug)]
+pub struct ApuSmpState {
+    pub reg_pc: u16,
+    pub reg_a: u8,
+    pub reg_x: u8,
+    pub reg_y: u8,
+    pub reg_sp: u8,
+    pub reg_psw: u8
+}
+
+#[derive(Copy, Clone, Default, Debug)]
+pub struct ApuScript700State {
+    pub wait_cycles: u32,
+    pub cmp1: u32,
+    pub cmp2: u32,
+    pub working_memory: [u32; 8],
+    pub pc: usize,
+    pub input_ports_unbuffered: bool,
+    pub call_stack_size: usize,
+    pub call_stack_enabled: bool
+}
+
 pub trait ApuStateReceiver {
-    fn receive(&mut self, channel: usize, state: ApuChannelState);
-    fn receive_master(&mut self, state: ApuMasterState);
+    fn receive_channel(&mut self, channel: usize, state: ApuChannelState) {
+        let _ = (channel, state);
+    }
+
+    fn receive_master(&mut self, state: ApuMasterState) {
+        let _ = state;
+    }
+
+    fn receive_smp(&mut self, state: ApuSmpState) {
+        let _ = state;
+    }
+
+    fn receive_script700(&mut self, state: ApuScript700State) {
+        let _ = state;
+    }
 }
 
 static DEFAULT_IPL_ROM: [u8; IPL_ROM_LEN] = [
@@ -51,7 +93,7 @@ static DEFAULT_IPL_ROM: [u8; IPL_ROM_LEN] = [
 ];
 
 pub struct Apu {
-    ram: Box<[u8]>,
+    pub(crate) ram: Box<[u8; RAM_LEN]>,
     pub(crate) ipl_rom: Box<[u8]>,
     pub(crate) output_ports: [u8; 4],
 
@@ -73,8 +115,8 @@ pub struct Apu {
 impl Apu {
     pub fn new() -> Box<Apu> {
         let mut ret = Box::new(Apu {
-            ram: vec![0; RAM_LEN].into_boxed_slice(),
-            ipl_rom: DEFAULT_IPL_ROM.iter().cloned().collect::<Vec<_>>().into_boxed_slice(),
+            ram: Box::new([0; RAM_LEN]),
+            ipl_rom: Box::new(DEFAULT_IPL_ROM),
             output_ports: [0u8; 4],
 
             smp: None,
@@ -137,6 +179,8 @@ impl Apu {
         }
 
         self.script700_runtime.as_mut().unwrap().reset();
+        self.output_filter.clear();
+        self.dsp.as_mut().unwrap().output_buffer.clear();
     }
 
     pub fn from_spc(spc: &Spc) -> Box<Apu> {
@@ -153,7 +197,7 @@ impl Apu {
         self.script700_runtime.as_mut().unwrap().load_script(script_path)
     }
 
-    pub fn render(&mut self, left_buffer: &mut [i16], right_buffer: &mut [i16], num_samples: i32) {
+    pub fn render(&mut self, left_buffer: &mut [i16], right_buffer: &mut [i16], num_samples: usize) {
         let smp = self.smp.as_mut().unwrap();
         let dsp = self.dsp.as_mut().unwrap();
         while dsp.output_buffer.get_sample_count() < num_samples {
@@ -209,7 +253,7 @@ impl Apu {
             match address {
                 0xf0 => { self.set_test_reg(value); },
                 0xf1 => { self.set_control_reg(value); },
-                0xf2 => { self.dsp_reg_address = value; },
+                0xf2 => { self.dsp_reg_address = value & 0x7F; },
                 0xf3 => { self.dsp.as_mut().unwrap().set_register(self.dsp_reg_address, value); },
 
                 0xf4 ..= 0xf7 => {
@@ -272,12 +316,18 @@ impl Apu {
         self.timer2.set_enable((value & 0x04) != 0, true);
     }
 
+    pub fn resampling_mode(&self) -> ResamplingMode {
+        self.dsp.as_ref().unwrap().resampling_mode()
+    }
+
     pub fn set_resampling_mode(&mut self, resampling_mode: ResamplingMode) {
         self.dsp.as_mut().unwrap().set_resampling_mode(resampling_mode);
     }
 
     pub fn set_state_receiver(&mut self, state_receiver: Option<Arc<Mutex<dyn ApuStateReceiver>>>) {
-        self.dsp.as_mut().unwrap().state_receiver = state_receiver;
+        self.smp.as_mut().unwrap().state_receiver = state_receiver.clone();
+        self.dsp.as_mut().unwrap().state_receiver = state_receiver.clone();
+        self.script700_runtime.as_mut().unwrap().state_receiver = state_receiver.clone();
     }
 
     pub fn read_sample_directory(&mut self, source: u8) -> (u32, u32) {

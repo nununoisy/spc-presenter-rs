@@ -6,29 +6,29 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use slint;
 use native_dialog::FileDialog;
-use rodio::Source;
 use slint::Model;
 use i_slint_backend_winit::{WinitWindowAccessor, winit::window::ResizeDirection};
-use i_slint_backend_winit::winit::raw_window_handle::{HasRawWindowHandle, HasWindowHandle, RawWindowHandle};
 use i_slint_backend_winit::winit::window::UserAttentionType;
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig, SeekDirection};
 use crate::emulator::Emulator;
 
-slint::include_modules!();
+#[cfg(target_os = "windows")]
+use i_slint_backend_winit::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+#[cfg(target_os = "windows")]
+unsafe fn get_hwnd(window: &slint::Window) -> Option<*mut c_void> {
+    match window.window_handle().window_handle().ok()?.as_ref() {
+        RawWindowHandle::Win32(handle) => Some(handle.hwnd.get() as *mut c_void),
+        _ => None
+    }
+}
 
 #[cfg(not(target_os = "windows"))]
 unsafe fn get_hwnd(_window: &slint::Window) -> Option<*mut c_void> {
     None
 }
 
-
-#[cfg(target_os = "windows")]
-unsafe fn get_hwnd(window: &slint::Window) -> Option<*mut c_void> {
-    match window.window_handle().raw_window_handle().ok()? {
-        RawWindowHandle::Win32(handle) => Some(handle.hwnd.get() as *mut c_void),
-        _ => None
-    }
-}
+slint::include_modules!();
 
 fn browse_for_spc() -> Option<PathBuf> {
     let file_dialog = FileDialog::new()
@@ -56,10 +56,31 @@ pub fn run() {
     let audio_manager = Arc::new(Mutex::new(audio::AudioManager::new()));
 
     {
+        let main_window_weak = main_window.as_weak();
         let source = source.clone();
-        let mut audio_manager = audio_manager.clone();
+        let audio_manager = audio_manager.clone();
         main_window.on_init_audio(move || {
-            audio_manager.lock().unwrap().init(source.clone(), None);
+            let device_name = main_window_weak.unwrap().get_selected_device_name();
+            audio_manager.lock().unwrap().init(source.clone(), (!device_name.is_empty()).then_some(device_name.as_str()));
+        });
+    }
+
+    {
+        let main_window_weak = main_window.as_weak();
+        main_window.on_update_devices(move || {
+            main_window_weak.unwrap().set_updating_device_names(true);
+
+            let main_window_weak = main_window_weak.clone();
+            std::thread::spawn(move || {
+                let device_names: Vec<slint::SharedString> = audio::AudioManager::device_names()
+                    .into_iter()
+                    .map(|name| name.into())
+                    .collect();
+                main_window_weak.upgrade_in_event_loop(|main_window| {
+                    main_window.set_device_names(slint::ModelRc::new(slint::VecModel::from(device_names)));
+                    main_window.set_updating_device_names(false);
+                }).unwrap();
+            });
         });
     }
 
@@ -284,8 +305,6 @@ pub fn run() {
 
     {
         let main_window_weak = main_window.as_weak();
-        let source = source.clone();
-        let audio_manager = audio_manager.clone();
         controls.lock().unwrap().attach(move |event| {
             match event {
                 MediaControlEvent::Pause => main_window_weak.upgrade_in_event_loop(move |main_window| {

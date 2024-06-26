@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use crate::script700::lexer::{Token, TokenizeResult, tokenize_data_text_import};
 use crate::script700::context::{ImportContext, ScriptContext};
-use super::script_area::parse_import_path;
+use super::script_area::{parse_import_path, parse_nonparametric_literal};
 
 pub fn decode_hex(s: &str) -> Option<Vec<u8>> {
     if s.len() % 2 != 0 {
@@ -30,14 +30,6 @@ impl ParsedDataArea {
     }
 }
 
-fn parse_label(s: &str) -> Option<u16> {
-    if !s.starts_with(":") {
-        return None;
-    }
-
-    s[1..].parse::<u16>().ok().map(|label| label % 1024)
-}
-
 pub fn parse<'a>(tokenize_result: &'a TokenizeResult<'a>, import_context: ImportContext) -> ParsedDataArea {
     let mut result = ParsedDataArea::new();
     let mut hex_data = String::new();
@@ -47,6 +39,17 @@ pub fn parse<'a>(tokenize_result: &'a TokenizeResult<'a>, import_context: Import
         match token_iter.next() {
             Some((Token::Command(command), context)) => {
                 match *command {
+                    ":" => {
+                        if let Some(label) = parse_nonparametric_literal(&mut token_iter, 1024) {
+                            if let Some(data_block) = decode_hex(&hex_data) {
+                                result.data.extend(data_block);
+                                result.labels.push((label as u16, context.clone(), result.data.len()));
+                            } else {
+                                println!("[Script700] {}: warning: malformed hex data", context);
+                            }
+                            hex_data.clear();
+                        }
+                    }
                     "#i" | "#it" => {
                         let path = match parse_import_path(&mut token_iter) {
                             Some(path) => path,
@@ -80,16 +83,6 @@ pub fn parse<'a>(tokenize_result: &'a TokenizeResult<'a>, import_context: Import
 
                     _ => ()
                 };
-
-                if let Some(label) = parse_label(*command) {
-                    if let Some(data_block) = decode_hex(&hex_data) {
-                        result.data.extend(data_block);
-                        result.labels.push((label, context.clone(), result.data.len()));
-                    } else {
-                        println!("[Script700] {}: warning: malformed hex data", context);
-                    }
-                    hex_data.clear();
-                }
             },
             Some((Token::Data(hex), _)) => {
                 hex_data.push_str(*hex);

@@ -7,7 +7,7 @@ use std::time::Duration;
 use rodio::Source;
 use rodio::source::SeekError;
 use snes_apu_spcp::{Apu, ApuChannelState, ApuMasterState, ApuStateReceiver, search_for_script700_file};
-use spc_spcp::spc::{Id666Tag, Spc};
+use spc_spcp::spc::Spc;
 
 type BufferedAudio = Arc<RwLock<Vec<i16>>>;
 type BufferedStates = Arc<RwLock<Vec<EmulatorState>>>;
@@ -32,7 +32,7 @@ impl EmulatorState {
 }
 
 impl ApuStateReceiver for EmulatorState {
-    fn receive(&mut self, channel: usize, state: ApuChannelState) {
+    fn receive_channel(&mut self, channel: usize, state: ApuChannelState) {
         self.0[channel] = state;
     }
 
@@ -59,13 +59,13 @@ const SAMPLES_PER_STATE: usize = 320;
 
 fn spawn_emulator_thread(channel: mpsc::Receiver<EmulatorThreadMessage>, buffered_audio: BufferedAudio, buffered_states: BufferedStates, seek_position: SeekPosition) -> thread::JoinHandle<()> {
     thread::spawn(move || {
-        let mut buffered_audio = buffered_audio.clone();
-        let mut buffered_states = buffered_states.clone();
-        let mut seek_position = seek_position.clone();
+        let buffered_audio = buffered_audio.clone();
+        let buffered_states = buffered_states.clone();
+        let seek_position = seek_position.clone();
 
         let mut apu = Apu::new();
         let mut spc_loaded = false;
-        let mut state = Arc::new(Mutex::new(EmulatorState::new()));
+        let state = Arc::new(Mutex::new(EmulatorState::new()));
         let mut minimum_end_position = 0usize;
 
         'main: loop {
@@ -100,13 +100,17 @@ fn spawn_emulator_thread(channel: mpsc::Receiver<EmulatorThreadMessage>, buffere
                 for _ in 0..100 {
                     let mut l_audio_buffer = [0i16; SAMPLES_PER_STATE];
                     let mut r_audio_buffer = [0i16; SAMPLES_PER_STATE];
-                    apu.render(&mut l_audio_buffer, &mut r_audio_buffer, SAMPLES_PER_STATE as i32);
+                    apu.render(&mut l_audio_buffer, &mut r_audio_buffer, SAMPLES_PER_STATE);
 
-                    let nonplanar_audio: Vec<(i16, i16)> = iter::zip(r_audio_buffer, l_audio_buffer).collect();
-                    let nonplanar_audio: &[i16] = unsafe {
-                        std::slice::from_raw_parts(nonplanar_audio.as_ptr() as *const i16, nonplanar_audio.len() * 2)
-                    };
-                    buffered_audio.write().unwrap().extend_from_slice(nonplanar_audio);
+                    let mut nonplanar_audio = vec![0; 2 * SAMPLES_PER_STATE];
+                    unsafe {
+                        for (i, (l, r)) in iter::zip(l_audio_buffer, r_audio_buffer).enumerate() {
+                            *nonplanar_audio.get_unchecked_mut(2 * i) = r;
+                            *nonplanar_audio.get_unchecked_mut(2 * i + 1) = l;
+                        }
+                    }
+
+                    buffered_audio.write().unwrap().extend_from_slice(&nonplanar_audio);
                     buffered_states.write().unwrap().push(state.lock().unwrap().clone());
                 }
             } else {
@@ -151,6 +155,12 @@ impl Emulator {
     }
 }
 
+impl Drop for Emulator {
+    fn drop(&mut self) {
+        self.channel_tx.send(EmulatorThreadMessage::Terminate).unwrap();
+    }
+}
+
 #[derive(Clone)]
 pub struct EmulatorSource {
     buffered_audio: BufferedAudio,
@@ -168,13 +178,13 @@ impl EmulatorSource {
     }
 
     pub fn position(&self) -> Duration {
-        let pos = self.seek_position.load(Ordering::Relaxed) as f64;
-        Duration::from_secs_f64(pos / 64000.0)
+        let pos = (self.seek_position.load(Ordering::Relaxed) / 2) as f64;
+        Duration::from_secs_f64(pos / 32000.0)
     }
 
     pub fn buffer_length(&self) -> Duration {
-        let buffer_length = self.buffered_audio.read().unwrap().len() as f64;
-        Duration::from_secs_f64(buffer_length / 64000.0)
+        let buffer_length = (self.buffered_audio.read().unwrap().len() / 2) as f64;
+        Duration::from_secs_f64(buffer_length / 32000.0)
     }
 
     pub fn apu_state(&self) -> Option<EmulatorState> {
@@ -184,6 +194,11 @@ impl EmulatorSource {
         } else {
             self.buffered_states.read().unwrap().get(pos / (2 * SAMPLES_PER_STATE)).cloned()
         }
+    }
+
+    pub fn ensure_left(&mut self) {
+        let seek_position = self.seek_position.load(Ordering::Acquire);
+        self.seek_position.store(seek_position & !1, Ordering::Release);
     }
 }
 

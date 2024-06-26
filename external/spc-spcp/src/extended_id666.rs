@@ -1,9 +1,8 @@
 use std::convert::TryInto;
-use std::io::{Read, Result, Error, ErrorKind, Seek, SeekFrom, BufReader};
+use std::io::{Result, Error, ErrorKind, Seek};
 use std::ops::Deref;
 use std::time::Duration;
-use crate::spc::Id666Tag;
-use super::binary_reader::{BinaryRead, BinaryReader};
+use super::binary_reader::BinaryRead;
 use super::id666::Emulator;
 
 #[derive(Clone, Debug)]
@@ -185,5 +184,3 @@ macro_rules! search_xid6 {
         })
     }};
 }
-
-pub use search_xid6;

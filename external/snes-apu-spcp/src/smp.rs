@@ -1,4 +1,5 @@
-use super::apu::Apu;
+use std::sync::{Arc, Mutex};
+use super::apu::{Apu, ApuSmpState, ApuStateReceiver};
 
 pub struct Smp {
     emulator: *mut Apu,
@@ -20,13 +21,16 @@ pub struct Smp {
 
     is_stopped: bool,
 
-    cycle_count: i32
+    cycle_count: i32,
+
+    pub state_receiver: Option<Arc<Mutex<dyn ApuStateReceiver>>>,
+    state_update_cycle_count: i32
 }
 
 impl Smp {
-    pub fn new(emulator: *mut Apu) -> Smp {
-        Smp {
-            emulator: emulator,
+    pub fn new(emulator: *mut Apu) -> Self {
+        Self {
+            emulator,
 
             reg_pc: 0xffc0,
             reg_a: 0,
@@ -45,7 +49,10 @@ impl Smp {
 
             is_stopped: false,
 
-            cycle_count: 0
+            cycle_count: 0,
+
+            state_receiver: None,
+            state_update_cycle_count: 0
         }
     }
 
@@ -68,7 +75,9 @@ impl Smp {
     pub fn set_psw(&mut self, value: u8) {
         self.psw_c = (value & 0x01) != 0;
         self.psw_z = (value & 0x02) != 0;
+        self.psw_i = (value & 0x04) != 0;
         self.psw_h = (value & 0x08) != 0;
+        self.psw_b = (value & 0x10) != 0;
         self.psw_p = (value & 0x20) != 0;
         self.psw_v = (value & 0x40) != 0;
         self.psw_n = (value & 0x80) != 0;
@@ -78,9 +87,11 @@ impl Smp {
         ((if self.psw_n { 1 } else { 0 }) << 7) |
         ((if self.psw_v { 1 } else { 0 }) << 6) |
         ((if self.psw_p { 1 } else { 0 }) << 5) |
+        ((if self.psw_b { 1 } else { 0 }) << 4) |
         ((if self.psw_h { 1 } else { 0 }) << 3) |
+        ((if self.psw_i { 1 } else { 0 }) << 2) |
         ((if self.psw_z { 1 } else { 0 }) << 1) |
-        (if self.psw_c { 1 } else { 0 })
+         (if self.psw_c { 1 } else { 0 })
     }
 
     fn is_negative(value: u32) -> bool {
@@ -90,6 +101,29 @@ impl Smp {
     fn cycles(&mut self, num_cycles: i32) {
         self.emulator().cpu_cycles_callback(num_cycles);
         self.cycle_count += num_cycles;
+
+        self.state_update_cycle_count += num_cycles;
+        if self.state_update_cycle_count >= 32 {
+            self.state_update_cycle_count -= 32;
+
+            if self.state_receiver.is_some() {
+                let state = ApuSmpState {
+                    reg_pc: self.reg_pc,
+                    reg_a: self.reg_a,
+                    reg_x: self.reg_x,
+                    reg_y: self.reg_y,
+                    reg_sp: self.reg_sp,
+                    reg_psw: self.get_psw(),
+                };
+
+                self.state_receiver
+                    .as_ref()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .receive_smp(state);
+            }
+        }
     }
 
     fn read(&mut self, addr: u16) -> u8 {
@@ -1151,9 +1185,7 @@ impl Smp {
                     0xfc => adjust!(inc, self.reg_y),
                     0xfd => transfer!(self.reg_a, self.reg_y, false),
                     0xfe => self.bne_y_dec(),
-                    0xff => self.sleep_stop(),
-
-                    _ => unreachable!()
+                    0xff => self.sleep_stop()
                 }
             } else {
                 self.cycles(2);

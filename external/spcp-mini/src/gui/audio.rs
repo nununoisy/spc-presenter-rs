@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use rodio::{Device, DeviceTrait, OutputStream, OutputStreamHandle, Sink, Source};
 use std::time::Duration;
 use rodio::cpal::traits::HostTrait;
@@ -20,7 +19,7 @@ impl AudioManager {
         }
     }
 
-    pub fn device_names(&self) -> Vec<String> {
+    pub fn device_names() -> Vec<String> {
         let devices = match rodio::cpal::default_host().output_devices() {
             Ok(devices) => devices,
             Err(e) => {
@@ -35,7 +34,7 @@ impl AudioManager {
         })
     }
 
-    fn find_device(&self, device_name: &str) -> Option<Device> {
+    fn find_device(device_name: &str) -> Option<Device> {
         let mut devices = match rodio::cpal::default_host().output_devices() {
             Ok(devices) => devices,
             Err(e) => {
@@ -47,7 +46,7 @@ impl AudioManager {
         devices.find(|device| device.name().unwrap_or("".to_string()).as_str() == device_name)
     }
 
-    pub fn init(&mut self, source: EmulatorSource, device_name: Option<&str>) {
+    pub fn init(&mut self, mut source: EmulatorSource, device_name: Option<&str>) {
         let was_paused = self.is_paused();
 
         self.stream = None;
@@ -56,7 +55,7 @@ impl AudioManager {
 
         let new_stream = match device_name {
             Some(device_name) => {
-                match self.find_device(device_name) {
+                match Self::find_device(device_name) {
                     Some(device) => OutputStream::try_from_device(&device),
                     None => {
                         println!("Could not find device named '{}'.", device_name);
@@ -79,6 +78,7 @@ impl AudioManager {
 
         match Sink::try_new(self.stream_handle.as_ref().unwrap()) {
             Ok(sink) => {
+                source.ensure_left();
                 sink.append(rodio::source::Zero::<i16>::new(2, 32000).take_duration(Duration::from_millis(500)));
                 sink.append(source);
                 if was_paused {

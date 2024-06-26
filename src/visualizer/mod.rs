@@ -118,7 +118,7 @@ impl Visualizer {
 }
 
 impl ApuStateReceiver for Visualizer {
-    fn receive(&mut self, channel: usize, state: ApuChannelState) {
+    fn receive_channel(&mut self, channel: usize, state: ApuChannelState) {
         if !self.sample_data.contains_key(&state.source) {
             self.sample_data.insert(state.source, SampleData::default());
         }
@@ -177,6 +177,4 @@ impl ApuStateReceiver for Visualizer {
         self.piano_roll_states[channel].consume(&state, settings);
         self.channel_last_states[channel] = state;
     }
-
-    fn receive_master(&mut self, _state: ApuMasterState) {}
 }

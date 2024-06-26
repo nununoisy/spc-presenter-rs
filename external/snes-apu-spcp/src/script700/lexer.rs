@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use super::context::ScriptContext;
+use super::tokenizer::TokenizerAdapter;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Token<'a> {
     Invalid(&'a str),
     Command(&'a str),
@@ -17,7 +18,7 @@ fn tokenize_script_line(source_line: &str, context: Arc<ScriptContext>) -> (Line
     let mut tokens = Line::new();
     let mut area_ended = false;
 
-    for image in source_line.split_whitespace() {
+    for image in source_line.tokenize() {
         // Comments
         if image.starts_with(';') {
             break;
@@ -158,7 +159,8 @@ fn tokenize_data_line(source_line: &str, context: Arc<ScriptContext>) -> Line<'_
     for image in source_line.split_whitespace() {
         // Labels
         if image.starts_with(':') {
-            tokens.push(Token::Command(image));
+            tokens.push(Token::Command(":"));
+            tokens.push(Token::Parameter(&image[1..]));
             continue;
         }
 

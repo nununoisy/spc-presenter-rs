@@ -18,38 +18,6 @@ pub enum ResamplingMode {
     Accurate
 }
 
-#[derive(Clone, Copy, Default)]
-pub struct VoiceOutput {
-    pub left_out: i32,
-    pub right_out: i32,
-    pub last_voice_out: i32,
-}
-
-pub const VOICE_BUFFER_LEN: usize = 128;
-
-pub struct VoiceBuffer {
-    pub buffer: Box<[VoiceOutput]>,
-    pub pos: i32,
-}
-
-impl VoiceBuffer {
-    pub fn new() -> VoiceBuffer {
-        VoiceBuffer {
-            buffer: vec![VoiceOutput::default(); VOICE_BUFFER_LEN].into_boxed_slice(),
-            pos: 0,
-        }
-    }
-
-    pub fn write(&mut self, value: VoiceOutput) {
-        self.buffer[self.pos as usize] = value;
-        self.pos = (self.pos + 1) % (VOICE_BUFFER_LEN as i32);
-    }
-
-    pub fn read(&self) -> VoiceOutput {
-        self.buffer.get(self.pos as usize).cloned().unwrap()
-    }
-}
-
 pub struct Voice {
     dsp: *mut Dsp,
     emulator: *mut Apu,
@@ -92,7 +60,6 @@ pub struct Voice {
     resample_buffer_pos: usize,
 
     pub(super) amplitude: Stereo<i32>,
-    pub output_buffer: VoiceBuffer,
     pub is_muted: bool,
     pub is_solod: bool,
 
@@ -146,7 +113,6 @@ impl Voice {
             resample_buffer_pos: 0,
 
             amplitude: Stereo::default(),
-            output_buffer: VoiceBuffer::new(),
             is_muted: false,
             is_solod: false,
 

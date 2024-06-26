@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::Path;
-use std::sync::Arc;
-use crate::apu::Apu;
+use std::sync::{Arc, Mutex};
+use crate::apu::{Apu, ApuScript700State, ApuStateReceiver};
 use crate::script700::context::ImportContext;
 use super::{lexer, parser::{self, script_area::{ScriptAst, Command, Condition, Operation, Parameter, ParameterValue}}, context::ScriptContext};
 
@@ -28,7 +28,10 @@ pub struct Runtime {
 
     data_area: Vec<u8>,
 
-    labels: HashMap<u16, (bool, usize)>
+    labels: HashMap<u16, (bool, usize)>,
+
+    pub state_receiver: Option<Arc<Mutex<dyn ApuStateReceiver>>>,
+    state_update_cycle_count: i32
 }
 
 impl Runtime {
@@ -54,7 +57,10 @@ impl Runtime {
 
             data_area: vec![],
 
-            labels: HashMap::new()
+            labels: HashMap::new(),
+
+            state_receiver: None,
+            state_update_cycle_count: 0
         })
     }
 
@@ -67,7 +73,7 @@ impl Runtime {
     pub fn reset(&mut self) {
         self.script_ast = ScriptAst::new();
         self.script_pc = 0;
-        self.wait_cycles = 64;
+        self.wait_cycles = 32;
         self.cmp1 = 0;
         self.cmp2 = 0;
         self.working_memory.fill(0);
@@ -244,6 +250,31 @@ impl Runtime {
     }
 
     pub fn cycles_callback(&mut self, num_cycles: i32) {
+        self.state_update_cycle_count += num_cycles;
+        if self.state_update_cycle_count >= 32 {
+            self.state_update_cycle_count -= 32;
+
+            if self.state_receiver.is_some() {
+                let state = ApuScript700State {
+                    wait_cycles: self.wait_cycles,
+                    cmp1: self.cmp1,
+                    cmp2: self.cmp2,
+                    working_memory: self.working_memory,
+                    pc: self.script_pc,
+                    input_ports_unbuffered: self.input_ports_unbuffered,
+                    call_stack_size: self.call_stack.len(),
+                    call_stack_enabled: self.call_stack_enabled
+                };
+
+                self.state_receiver
+                    .as_ref()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .receive_script700(state);
+            }
+        }
+
         self.wait_cycles = self.wait_cycles.saturating_sub(2 * num_cycles as u32);
         if self.wait_port_event.is_some() {
             self.wait_port_cycles += num_cycles as u32;
@@ -369,10 +400,6 @@ impl Runtime {
                 },
                 Command::Import { .. } => {}
             }
-
-            // println!("[Script700] debug: executed @{} {:?}", self.script_pc, &command);
-            // println!("            wait: {}, error: {}, r: {:?}, f: {:?}", self.wait_cycles, runtime_error, self.call_stack_enabled, self.input_ports_unbuffered);
-            // println!("            cmp: {} {}, work: {:?}", self.cmp1, self.cmp2, self.working_memory);
 
             if runtime_error {
                 loop {

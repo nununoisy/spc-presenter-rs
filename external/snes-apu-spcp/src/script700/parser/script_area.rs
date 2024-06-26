@@ -4,7 +4,7 @@ use crate::script700::lexer::{Token, TokenizeResult, tokenize_script_import};
 use crate::script700::context::{ImportContext, ScriptContext};
 use super::expect_token;
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
 pub enum MemoryAccessWidth {
     #[default]
     Byte,
@@ -33,7 +33,7 @@ fn parse_numeric_constant(s: &str) -> Option<u32> {
         .ok()
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum ParameterValue<const MAX: u32> {
     Literal(u32),
     Dynamic(bool)
@@ -128,7 +128,7 @@ pub fn parse_import_path<'i, 'a: 'i, I: Iterator<Item = &'a (Token<'a>, Arc<Scri
     Some(result)
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Parameter {
     Number(ParameterValue<{ u32::MAX }>),
     InputPort(ParameterValue<4>),
@@ -202,7 +202,7 @@ impl Parameter {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Operation {
     Add,
     Subtract,
@@ -261,7 +261,7 @@ impl Operation {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Condition {
     Always,
     Equal,
@@ -296,7 +296,7 @@ impl Condition {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Command {
     Label { label: u16 },
     Wait { cycles: Parameter },
