@@ -1,0 +1,470 @@
+import { Palette, ScrollView, Spinner } from "std-widgets.slint";
+import { SeekBar } from "./seek-bar.slint";
+import { FluentCard } from "./fluent-card.slint";
+
+component MenuItem {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> has-submenu: false;
+    in property <bool> selectable: false;
+    in property <bool> selected: false;
+    in property <bool> enabled: true;
+
+    out property <bool> has-hover: i-touch-area.has-hover;
+    callback clicked <=> i-touch-area.clicked;
+    callback hovered();
+
+    min-height: 32px;
+    min-width: 200px;
+
+    i-touch-area := TouchArea {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        enabled: root.enabled;
+        pointer-event(ev) => {
+            if (ev.kind == PointerEventKind.move) {
+                root.hovered();
+            }
+        }
+    }
+
+    i-background := Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        background: white;
+        opacity: 0;
+        border-radius: 4px;
+
+        animate opacity {
+            duration: 100ms;
+            easing: ease-in-out;
+        }
+    }
+
+    HorizontalLayout {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+
+        alignment: stretch;
+        padding: 6px;
+        spacing: 8px;
+
+        if root.selectable: Image {
+            width: 20px;
+            height: 20px;
+            source: @image-url("checkmark.svg");
+            opacity: root.selected ? 1 : 0;
+        }
+        if root.icon.width > 0: Image {
+            width: 20px;
+            height: 20px;
+            source: root.icon;
+        }
+        Text {
+            text: root.text;
+            font-size: 14px;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+        if root.has-submenu: Image {
+            width: 20px;
+            height: 20px;
+            source: @image-url("chevron-right.svg");
+        }
+    }
+
+    states [
+        active when i-touch-area.pressed: {
+            i-background.opacity: 0.3;
+        }
+        hovered when i-touch-area.has-hover: {
+            i-background.opacity: 0.15;
+        }
+    ]
+}
+
+component Menu {
+    in property <bool> open: false;
+    in property <bool> is-submenu: false;
+    
+    property <length> i-animate-offset: open ? 0px : 16px;
+    
+    min-width: 216px;
+    min-height: 112px;
+
+    TouchArea {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        enabled: root.open;
+    }
+    
+    i-card := FluentCard {
+        x: is-submenu ? -i-animate-offset : 0;
+        y: !is-submenu ? i-animate-offset : 0;
+        width: root.width;
+        height: root.height;
+        n: 8;
+        opacity: open ? 1 : 0;
+
+        i-layout := VerticalLayout {
+            x: 0;
+            y: 0;
+            padding: 8px;
+            alignment: start;
+
+            @children
+        }
+
+        animate opacity {
+            duration: 200ms;
+            easing: ease-in-out;
+        }
+    }
+
+    animate i-animate-offset {
+        duration: 200ms;
+        easing: ease-in-out;
+    }
+}
+
+component AudioDeviceMenu {
+    in property <bool> open: false;
+
+    in property <bool> updating;
+    in-out property <string> selected-device-name: "";
+    in property <[string]> device-names;
+
+    callback selected(string);
+
+    Menu {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        open: root.open;
+        is-submenu: true;
+
+        if root.updating: VerticalLayout {
+            alignment: center;
+
+            Spinner {
+                indeterminate: true;
+            }
+        }
+        if root.open && !root.updating: ScrollView {
+            height: root.height - 16px;
+            viewport-width: self.width;
+            enabled: root.open && !root.updating;
+    
+            VerticalLayout {
+                x: 0;
+                y: 0;
+                alignment: start;
+    
+                MenuItem {
+                    text: "Default";
+                    selectable: true;
+                    selected: root.selected-device-name == "";
+                    clicked => {
+                        root.selected-device-name = "";
+                        root.selected("");
+                    }
+                }
+                for device-name in root.device-names: MenuItem {
+                    text: device-name;
+                    selectable: true;
+                    selected: root.selected-device-name == device-name;
+                    clicked => {
+                        root.selected-device-name = device-name;
+                        root.selected(device-name);
+                    }
+                }
+            }
+        }
+    }
+}
+
+component MenuDivider {
+    height: 9px;
+
+    in property <bool> menu-open: false;
+    out property <bool> has-hover: i-touch-area.has-hover;
+    callback clicked <=> i-touch-area.clicked;
+    callback hovered();
+
+    i-touch-area := TouchArea {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        enabled: root.menu-open;
+        pointer-event(ev) => {
+            if (ev.kind == PointerEventKind.move) {
+                root.hovered();
+            }
+        }
+    }
+
+    Rectangle {
+        x: 0;
+        y: 4px;
+        width: root.width;
+        height: 1px;
+        background: #404040;
+    }
+}
+
+export enum SampleInterpolationType {
+    Accurate,
+    Gaussian,
+    Linear,
+    Cubic,
+    Sinc
+}
+
+export component SettingsMenu {
+    in property <bool> open: true;
+    in-out property <float> volume: 1;
+    in property <bool> updating: false;
+    in-out property <string> selected-device-name: "";
+    in property <[string]> device-names: ["test 1", "test 2", "test 3", "test 4"];
+    in-out property <SampleInterpolationType> sample-interpolation-type: Accurate;
+    in-out property <bool> filter-enabled: true;
+    in-out property <bool> script700-enabled: true;
+
+    callback device-selected(string);
+    callback sample-interpolation-type-selected(SampleInterpolationType);
+    callback volume-changed(float);
+    callback filter-enabled-selected(bool);
+    callback script700-enabled-selected(bool);
+
+    min-height: 190px;
+    min-width: 420px;
+
+    public function close-submenus() {
+        i-devices-menu.open = false;
+        i-sample-interpolation-menu.open = false;
+    }
+
+    i-primary-menu := Menu {
+        x: 0;
+        y: root.height - self.height;
+        z: 10;
+        height: 194px;
+        width: 220px;
+        open: root.open;
+
+        Rectangle {
+            height: 32px;
+
+            TouchArea {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: 32px;
+                enabled: root.open;
+                pointer-event(ev) => {
+                    if (ev.kind == PointerEventKind.move) {
+                        root.close-submenus();
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: 32px;
+                alignment: stretch;
+                padding: 6px;
+                spacing: 8px;
+
+                Image {
+                    width: 20px;
+                    height: 20px;
+                    source: root.volume == 0 ? @image-url("speaker-mute.svg") :
+                            root.volume <= 0.33 ? @image-url("speaker0.svg") :
+                            root.volume <= 0.66 ? @image-url("speaker1.svg") :
+                            @image-url("speaker2.svg");
+                }
+                i-volume-slider := SeekBar {
+                    minimum: 0;
+                    maximum: 1;
+                    value <=> root.volume;
+                    enabled: root.open;
+                    hovered => {
+                        root.close-submenus();
+                    }
+                    changed(volume) => {
+                        root.volume-changed(volume);
+                    }
+                }
+            }
+        }
+        i-devices-item := MenuItem {
+            text: "Output device";
+            icon: @image-url("speaker-settings.svg");
+            has-submenu: true;
+            enabled: root.open;
+            hovered => {
+                root.close-submenus();
+                i-devices-menu.open = true;
+            }
+        }
+        MenuDivider {
+            menu-open: root.open;
+            hovered => {
+                root.close-submenus();
+            }
+        }
+        i-sample-interpolation-item := MenuItem {
+            text: "Sample interpolation";
+            icon: @image-url("sine-duotone.svg");
+            has-submenu: true;
+            enabled: root.open;
+            hovered => {
+                root.close-submenus();
+                i-sample-interpolation-menu.open = true;
+            }
+        }
+        MenuDivider {
+            menu-open: root.open;
+            hovered => {
+                root.close-submenus();
+            }
+        }
+        MenuItem {
+            text: "Blargg's SPC filter";
+            icon: @image-url("filter.svg");
+            selectable: true;
+            selected: root.filter-enabled;
+            enabled: root.open;
+            hovered => {
+                root.close-submenus();
+            }
+            clicked => {
+                root.close-submenus();
+                root.filter-enabled = !root.filter-enabled;
+                root.filter-enabled-selected(root.filter-enabled);
+            }
+        }
+        MenuItem {
+            text: "Script700";
+            icon: @image-url("script700.svg");
+            selectable: true;
+            selected: root.script700-enabled;
+            enabled: root.open;
+            hovered => {
+                root.close-submenus();
+            }
+            clicked => {
+                root.close-submenus();
+                root.script700-enabled = !root.script700-enabled;
+                root.script700-enabled-selected(root.script700-enabled);
+            }
+        }
+    }
+
+    i-devices-menu := AudioDeviceMenu {
+        x: i-primary-menu.width - 10px;
+        y: root.height - self.height;
+        z: 12;
+        height: clamp(48px + 32px * root.device-names.length, 112px, root.height);
+        width: 216px;
+        updating: root.updating;
+        selected-device-name <=> root.selected-device-name;
+        device-names: root.device-names;
+
+        selected(device) => {
+            root.close-submenus();
+            root.device-selected(device);
+        }
+    }
+
+    i-sample-interpolation-menu := Menu {
+        x: i-primary-menu.width - 10px;
+        y: root.height - self.height;
+        z: 11;
+        min-height: 112px;
+        height: min(176px, root.height);
+        width: 216px;
+        is-submenu: true;
+
+        ScrollView {
+            height: root.height - 16px;
+            viewport-width: self.width;
+            enabled: root.open && !root.updating;
+
+            VerticalLayout {
+                x: 0;
+                y: 0;
+                alignment: start;
+
+                MenuItem {
+                    text: "Accurate Gaussian";
+                    selectable: true;
+                    selected: root.sample-interpolation-type == SampleInterpolationType.Accurate;
+                    enabled: i-sample-interpolation-menu.open;
+                    clicked => {
+                        root.close-submenus();
+                        root.sample-interpolation-type = SampleInterpolationType.Accurate;
+                        root.sample-interpolation-type-selected(SampleInterpolationType.Accurate);
+                    }
+                }
+                MenuItem {
+                    text: "High-fidelity Gaussian";
+                    selectable: true;
+                    selected: root.sample-interpolation-type == SampleInterpolationType.Gaussian;
+                    enabled: i-sample-interpolation-menu.open;
+                    clicked => {
+                        root.close-submenus();
+                        root.sample-interpolation-type = SampleInterpolationType.Gaussian;
+                        root.sample-interpolation-type-selected(SampleInterpolationType.Gaussian);
+                    }
+                }
+                MenuItem {
+                    text: "Linear";
+                    selectable: true;
+                    selected: root.sample-interpolation-type == SampleInterpolationType.Linear;
+                    enabled: i-sample-interpolation-menu.open;
+                    clicked => {
+                        root.close-submenus();
+                        root.sample-interpolation-type = SampleInterpolationType.Linear;
+                        root.sample-interpolation-type-selected(SampleInterpolationType.Linear);
+                    }
+                }
+                MenuItem {
+                    text: "Cubic spline";
+                    selectable: true;
+                    selected: root.sample-interpolation-type == SampleInterpolationType.Cubic;
+                    enabled: i-sample-interpolation-menu.open;
+                    clicked => {
+                        root.close-submenus();
+                        root.sample-interpolation-type = SampleInterpolationType.Cubic;
+                        root.sample-interpolation-type-selected(SampleInterpolationType.Cubic);
+                    }
+                }
+                MenuItem {
+                    text: "Sinc";
+                    selectable: true;
+                    selected: root.sample-interpolation-type == SampleInterpolationType.Sinc;
+                    enabled: i-sample-interpolation-menu.open;
+                    clicked => {
+                        root.close-submenus();
+                        root.sample-interpolation-type = SampleInterpolationType.Sinc;
+                        root.sample-interpolation-type-selected(SampleInterpolationType.Sinc);
+                    }
+                }
+            }
+        }
+    }
+}

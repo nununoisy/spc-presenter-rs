@@ -2,10 +2,10 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufWriter, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::{iter, thread};
-use std::time::Duration;
-use snes_apu_spcp::Apu;
+use std::time::{Duration, Instant};
+use snes_apu_spcp::{Apu, search_for_script700_file};
 use spc_spcp::spc::Spc;
 
 const BUFFER_SIZE: usize = 1024;
@@ -41,9 +41,14 @@ impl WavWriter {
     }
 
     fn update_chunk(&mut self, chunk_offset: u64) -> io::Result<()> {
-        let current_offset = self.writer.stream_position()?;
+        let mut current_offset = self.writer.stream_position()?;
         debug_assert!(current_offset > chunk_offset);
 
+        if current_offset % 2 == 1 {
+            // align
+            self.write_u8(0)?;
+            current_offset = self.writer.stream_position()?;
+        }
         let chunk_size = (current_offset - chunk_offset) as u32;
 
         self.writer.seek(SeekFrom::Start(chunk_offset - 4))?;
@@ -72,16 +77,17 @@ impl WavWriter {
         self.writer.write_all(value.to_le_bytes().as_slice())
     }
 
-    fn write_list_item(&mut self, key: &'static [u8], value: &str) -> io::Result<()> {
+    fn write_list_item<S: AsRef<str>>(&mut self, key: &'static [u8], value: S) -> io::Result<()> {
         debug_assert_eq!(key.len(), 4);
 
-        if value.is_empty() {
+        if value.as_ref().is_empty() {
             return Ok(());
         }
+        let value = value.as_ref().as_bytes();
 
         self.writer.write_all(key)?;
-        self.write_u32(1 + value.as_bytes().len() as u32)?;
-        self.writer.write_all(value.as_bytes())?;
+        self.write_u32(1 + value.len() as u32)?;
+        self.writer.write_all(value)?;
         self.write_u8(0)
     }
 
@@ -101,25 +107,22 @@ impl WavWriter {
     }
 
     pub fn write_metadata(&mut self, spc: &Spc) -> io::Result<()> {
-        let metadata = match spc.metadata() {
-            Some(metadata) => metadata,
-            None => return Ok(())
-        };
+        let metadata = spc.metadata();
 
         let info_list_offset = self.write_chunk(b"LIST", Some(b"INFO"))?;
 
-        self.write_list_item(b"INAM", metadata.title().as_str())?;
-        self.write_list_item(b"IPRD", metadata.game_title().as_str())?;
-        self.write_list_item(b"IART", metadata.artist_name().as_str())?;
-        self.write_list_item(b"ITCH", metadata.dumper_name().as_str())?;
-        self.write_list_item(b"ICMT", metadata.comments().as_str())?;
+        self.write_list_item(b"INAM", metadata.song_title().unwrap_or_default())?;
+        self.write_list_item(b"IPRD", metadata.game_title().unwrap_or_default())?;
+        self.write_list_item(b"IART", metadata.artist_name().unwrap_or_default())?;
+        self.write_list_item(b"ITCH", metadata.dumper_name().unwrap_or_default())?;
+        self.write_list_item(b"ICMT", metadata.comments().unwrap_or_default())?;
         self.write_list_item(b"ISFT", "SPCPresenter Mini")?;
 
         self.update_chunk(info_list_offset)
     }
 
     pub fn write_samples(&mut self, l_audio_buffer: &[i16], r_audio_buffer: &[i16]) -> io::Result<()> {
-        if self.data_offset = 0 {
+        if self.data_offset == 0 {
             self.data_offset = self.write_chunk(b"data", None)?;
         }
         for (l, r) in iter::zip(l_audio_buffer, r_audio_buffer) {
@@ -131,7 +134,8 @@ impl WavWriter {
 
     pub fn finish(&mut self) -> io::Result<()> {
         self.update_chunk(self.data_offset)?;
-        self.update_chunk(self.riff_offset)
+        self.update_chunk(self.riff_offset)?;
+        self.writer.flush()
     }
 }
 
@@ -139,55 +143,57 @@ impl WavWriter {
 enum WavExporterThreadRequest {
     Export {
         wav_path: PathBuf,
-        spc: Box<Spc>,
-        script700_path: Option<PathBuf>
+        spc_path: PathBuf
     },
     Cancel,
     Terminate
 }
 
 #[derive(Clone)]
-enum WavExporterThreadResponse {
+pub enum WavExporterMessage {
     Progress {
         current_time: Duration,
         total_time: Duration
     },
     Finished,
-    Error(Box<dyn Error>)
+    Error(Arc<dyn Error>)
 }
 
 macro_rules! we_unwrap {
-    ($v: expr, $response_channel: tt, $lbl: tt) => {
+    ($v: expr, $cb: tt, $lbl: tt) => {
         match $v {
             Ok(v) => v,
             Err(e) => {
-                $response_channel.send(WavExporterThreadResponse::Error(Box::new(e))).unwrap();
+                $cb(WavExporterMessage::Error(Arc::new(e)));
                 continue $lbl;
             }
         }
     };
 }
 
-fn spawn_wav_exporter_thread(request_channel: mpsc::Receiver<WavExporterThreadRequest>, response_channel: mpsc::Sender<WavExporterThreadResponse>) -> thread::JoinHandle<()> {
+pub fn spawn_wav_exporter_thread<F>(request_channel: mpsc::Receiver<WavExporterThreadRequest>, mut cb: F) -> thread::JoinHandle<()>
+    where
+        F: FnMut(WavExporterMessage) + Send + 'static
+{
     thread::spawn(move || {
-        let mut apu = Apu::new();
-
         'main: loop {
-            let (wav_path, spc, script700_path) = match request_channel.recv().unwrap() {
-                WavExporterThreadRequest::Export { wav_path, spc, script700_path } => (wav_path, spc, script700_path),
+            let (wav_path, spc_path) = match request_channel.recv().unwrap() {
+                WavExporterThreadRequest::Export { wav_path, spc_path } => (wav_path, spc_path),
                 WavExporterThreadRequest::Cancel => continue 'main,
                 WavExporterThreadRequest::Terminate => break 'main
             };
 
-            let mut wav_writer = we_unwrap!(WavWriter::new(wav_path), response_channel, 'main);
-            we_unwrap!(wav_writer.start(), response_channel, 'main);
-            we_unwrap!(wav_writer.write_metadata(&spc), response_channel, 'main);
+            let spc = we_unwrap!(Spc::load(&spc_path), cb, 'main);
 
-            apu = Apu::from_spc(&spc);
+            let mut wav_writer = we_unwrap!(WavWriter::new(wav_path), cb, 'main);
+            we_unwrap!(wav_writer.start(), cb, 'main);
+            we_unwrap!(wav_writer.write_metadata(&spc), cb, 'main);
+
+            let mut apu = Apu::from_spc(&spc);
             apu.clear_echo_buffer();
 
-            if let Some(script700_path) = script700_path {
-                let _ = apu.load_script700(script700_path);
+            if let Some(script700_path) = search_for_script700_file(&spc_path) {
+                we_unwrap!(apu.load_script700(script700_path), cb, 'main);
             }
 
             let mut l_audio_buffer = [0i16; BUFFER_SIZE];
@@ -197,29 +203,84 @@ fn spawn_wav_exporter_thread(request_channel: mpsc::Receiver<WavExporterThreadRe
             let total_time = play_time + fadeout_time;
             let mut current_time = Duration::ZERO;
             let mut samples_left = (total_time.as_secs_f64() * 32000.0) as usize;
+            let mut last_updated = Instant::now();
 
-            while samples_left > 0 {
+            cb(WavExporterMessage::Progress {
+                current_time,
+                total_time
+            });
+
+            'encode: while samples_left > 0 {
                 let n = samples_left.min(BUFFER_SIZE);
-                apu.render(&mut l_audio_buffer[..n], &mut r_audio_buffer[..n], n as i32);
-                we_unwrap!(wav_writer.write_samples(&l_audio_buffer[..n], &r_audio_buffer[..n]), response_channel, 'main);
+                apu.render(&mut l_audio_buffer[..n], &mut r_audio_buffer[..n], n);
+                we_unwrap!(wav_writer.write_samples(&l_audio_buffer[..n], &r_audio_buffer[..n]), cb, 'main);
                 samples_left -= n;
-                current_time += Duration::from_secs_f64(n as f64 / 64000.0);
+                current_time += Duration::from_secs_f64(n as f64 / 32000.0);
 
-                response_channel.send(WavExporterThreadResponse::Progress {
-                    current_time,
-                    total_time
-                }).unwrap();
+                match request_channel.try_recv() {
+                    Ok(WavExporterThreadRequest::Cancel) => break 'encode,
+                    Ok(WavExporterThreadRequest::Terminate) => break 'main,
+                    _ => ()
+                };
+
+                if last_updated.elapsed() > Duration::from_millis(100) {
+                    cb(WavExporterMessage::Progress {
+                        current_time,
+                        total_time
+                    });
+                    last_updated = Instant::now();
+                }
             }
 
-            we_unwrap!(wav_writer.finish(), response_channel, 'main);
-            drop(wav_writer);
-
-            response_channel.send(WavExporterThreadResponse::Finished).unwrap();
+            we_unwrap!(wav_writer.finish(), cb, 'main);
+            cb(WavExporterMessage::Finished);
         }
     })
 }
 
 pub struct WavExporter {
     handle: thread::JoinHandle<()>,
-    request_channel: mpsc::Sender<WavExporterThreadResponse>
+    request_channel: mpsc::Sender<WavExporterThreadRequest>,
+    spc_path: Option<PathBuf>
+}
+
+impl WavExporter {
+    pub fn new<F: FnMut(WavExporterMessage) + Send + 'static>(cb: F) -> Self {
+        let (request_channel, request_channel_rx) = mpsc::channel();
+        let handle = spawn_wav_exporter_thread(request_channel_rx, cb);
+
+        Self {
+            handle,
+            request_channel,
+            spc_path: None
+        }
+    }
+
+    pub fn set_spc_path<P: AsRef<Path>>(&mut self, spc_path: P) {
+        self.spc_path = Some(spc_path.as_ref().to_path_buf());
+    }
+
+    pub fn export<P: AsRef<Path>>(&self, wav_path: P) {
+        let wav_path = wav_path.as_ref().to_path_buf();
+        let spc_path = match &self.spc_path {
+            Some(spc_path) => spc_path.clone(),
+            None => return
+        };
+
+        self.request_channel.send(WavExporterThreadRequest::Export {
+            wav_path,
+            spc_path
+        }).unwrap();
+    }
+
+    pub fn cancel(&self) {
+        self.request_channel.send(WavExporterThreadRequest::Cancel).unwrap();
+    }
+}
+
+impl Drop for WavExporter {
+    fn drop(&mut self) {
+        self.request_channel.send(WavExporterThreadRequest::Cancel).unwrap();
+        self.request_channel.send(WavExporterThreadRequest::Terminate).unwrap();
+    }
 }

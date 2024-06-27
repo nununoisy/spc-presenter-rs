@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use rodio::Source;
 use rodio::source::SeekError;
-use snes_apu_spcp::{Apu, ApuChannelState, ApuMasterState, ApuStateReceiver, search_for_script700_file};
+use snes_apu_spcp::{Apu, ApuChannelState, ApuMasterState, ApuStateReceiver, ResamplingMode, search_for_script700_file};
 use spc_spcp::spc::Spc;
 
 type BufferedAudio = Arc<RwLock<Vec<i16>>>;
@@ -52,6 +52,8 @@ impl Deref for EmulatorState {
 #[derive(Clone)]
 enum EmulatorThreadMessage {
     LoadSpc(Box<Spc>, Option<PathBuf>),
+    SetResamplingMode(ResamplingMode),
+
     Terminate
 }
 
@@ -64,21 +66,27 @@ fn spawn_emulator_thread(channel: mpsc::Receiver<EmulatorThreadMessage>, buffere
         let seek_position = seek_position.clone();
 
         let mut apu = Apu::new();
-        let mut spc_loaded = false;
+        let mut resampling_mode = ResamplingMode::Accurate;
+        let mut spc: Option<Box<Spc>> = None;
+        let mut script700_path: Option<PathBuf> = None;
         let state = Arc::new(Mutex::new(EmulatorState::new()));
         let mut minimum_end_position = 0usize;
 
         'main: loop {
             match channel.try_recv() {
-                Ok(EmulatorThreadMessage::LoadSpc(spc, script700_path)) => {
-                    apu = Apu::from_spc(&spc);
-                    apu.clear_echo_buffer();
+                Ok(EmulatorThreadMessage::LoadSpc(in_spc, in_script700_path)) => {
+                    spc = Some(in_spc);
+                    script700_path = in_script700_path;
 
-                    if let Some(script700_path) = script700_path {
+                    apu = Apu::from_spc(spc.as_ref().unwrap());
+                    apu.clear_echo_buffer();
+                    apu.set_resampling_mode(resampling_mode);
+
+                    if let Some(script700_path) = script700_path.as_ref() {
                         let _ = apu.load_script700(script700_path);
                     }
 
-                    if let Some(id666_tag) = &spc.id666_tag {
+                    if let Some(id666_tag) = &spc.as_ref().unwrap().id666_tag {
                         minimum_end_position = 64 * (id666_tag.play_time + id666_tag.fadeout_time).as_millis() as usize;
                     } else {
                         minimum_end_position = 64 * 60 * 1000;
@@ -92,13 +100,29 @@ fn spawn_emulator_thread(channel: mpsc::Receiver<EmulatorThreadMessage>, buffere
                     buffered_audio.write().unwrap().shrink_to(minimum_end_position);
                     buffered_states.write().unwrap().clear();
                     buffered_states.write().unwrap().shrink_to(minimum_end_position);
-                    spc_loaded = true;
                 },
+                Ok(EmulatorThreadMessage::SetResamplingMode(mode)) => {
+                    resampling_mode = mode;
+
+                    apu = Apu::from_spc(spc.as_ref().unwrap());
+                    apu.clear_echo_buffer();
+                    apu.set_resampling_mode(mode);
+
+                    if let Some(script700_path) = script700_path.as_ref() {
+                        let _ = apu.load_script700(script700_path);
+                    }
+
+                    state.lock().unwrap().reset();
+                    apu.set_state_receiver(Some(state.clone()));
+
+                    buffered_audio.write().unwrap().clear();
+                    buffered_states.write().unwrap().clear();
+                }
                 Ok(EmulatorThreadMessage::Terminate) => break 'main,
                 _ => ()
             }
 
-            if spc_loaded && seek_position.load(Ordering::Acquire).max(minimum_end_position) >= buffered_audio.read().unwrap().len().saturating_sub(1024000) {
+            if spc.is_some() && seek_position.load(Ordering::Acquire).max(minimum_end_position) >= buffered_audio.read().unwrap().len().saturating_sub(1024000) {
                 for _ in 0..100 {
                     let mut l_audio_buffer = [0i16; SAMPLES_PER_STATE];
                     let mut r_audio_buffer = [0i16; SAMPLES_PER_STATE];
@@ -125,9 +149,7 @@ fn spawn_emulator_thread(channel: mpsc::Receiver<EmulatorThreadMessage>, buffere
 pub struct Emulator {
     handle: thread::JoinHandle<()>,
     channel_tx: mpsc::Sender<EmulatorThreadMessage>,
-    buffered_audio: BufferedAudio,
-    buffered_states: BufferedStates,
-    seek_position: SeekPosition,
+    source: EmulatorSource
 }
 
 impl Emulator {
@@ -137,23 +159,18 @@ impl Emulator {
         let buffered_states: BufferedStates = Arc::new(RwLock::new(Vec::new()));
         let seek_position: SeekPosition = Arc::new(AtomicUsize::default());
 
+        let handle = spawn_emulator_thread(channel_rx, buffered_audio.clone(), buffered_states.clone(), seek_position.clone());
+        let source = EmulatorSource::new(channel_tx.clone(), buffered_audio, buffered_states, seek_position);
+
         Self {
-            handle: spawn_emulator_thread(channel_rx, buffered_audio.clone(), buffered_states.clone(), seek_position.clone()),
+            handle,
             channel_tx,
-            buffered_audio,
-            buffered_states,
-            seek_position
+            source
         }
     }
 
     pub fn iter(&self) -> EmulatorSource {
-        EmulatorSource::new(self.buffered_audio.clone(), self.buffered_states.clone(), self.seek_position.clone())
-    }
-
-    pub fn load_spc<P: AsRef<Path>>(&mut self, spc_path: P) -> Option<Box<Spc>> {
-        let spc = Box::new(Spc::load(&spc_path).ok()?);
-        self.channel_tx.send(EmulatorThreadMessage::LoadSpc(spc.clone(), search_for_script700_file(&spc_path))).unwrap();
-        Some(spc)
+        self.source.clone()
     }
 }
 
@@ -165,18 +182,30 @@ impl Drop for Emulator {
 
 #[derive(Clone)]
 pub struct EmulatorSource {
+    channel_tx: mpsc::Sender<EmulatorThreadMessage>,
     buffered_audio: BufferedAudio,
     buffered_states: BufferedStates,
     seek_position: SeekPosition
 }
 
 impl EmulatorSource {
-    pub(self) fn new(buffered_audio: BufferedAudio, buffered_states: BufferedStates, seek_position: SeekPosition) -> Self {
+    pub(self) fn new(channel_tx: mpsc::Sender<EmulatorThreadMessage>, buffered_audio: BufferedAudio, buffered_states: BufferedStates, seek_position: SeekPosition) -> Self {
         Self {
+            channel_tx,
             buffered_audio,
             buffered_states,
             seek_position
         }
+    }
+
+    pub fn load_spc<P: AsRef<Path>>(&self, spc_path: P) -> Option<Box<Spc>> {
+        let spc = Box::new(Spc::load(&spc_path).ok()?);
+        self.channel_tx.send(EmulatorThreadMessage::LoadSpc(spc.clone(), search_for_script700_file(&spc_path))).unwrap();
+        Some(spc)
+    }
+
+    pub fn set_resampling_mode(&self, resampling_mode: ResamplingMode) {
+        self.channel_tx.send(EmulatorThreadMessage::SetResamplingMode(resampling_mode)).unwrap();
     }
 
     pub fn position(&self) -> Duration {
@@ -198,7 +227,7 @@ impl EmulatorSource {
         }
     }
 
-    pub fn ensure_left(&mut self) {
+    pub fn ensure_left(&self) {
         let seek_position = self.seek_position.load(Ordering::Acquire);
         self.seek_position.store(seek_position & !1, Ordering::Release);
     }

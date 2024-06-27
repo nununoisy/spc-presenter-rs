@@ -1,6 +1,6 @@
 mod gui;
 mod emulator;
-// mod wav_exporter;
+mod wav_exporter;
 
 fn main() {
     gui::run();

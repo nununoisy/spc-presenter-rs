@@ -141,6 +141,7 @@ impl Apu {
     }
 
     pub fn set_output_filter_enabled(&mut self, enabled: bool) {
+        self.output_filter.clear();
         self.output_filter_enabled = enabled;
     }
 

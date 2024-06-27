@@ -10,10 +10,13 @@ use slint::Model;
 use i_slint_backend_winit::{WinitWindowAccessor, winit::window::ResizeDirection};
 use i_slint_backend_winit::winit::window::UserAttentionType;
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig, SeekDirection};
+use audio::AudioManager;
 use crate::emulator::Emulator;
+use crate::wav_exporter::{WavExporter, WavExporterMessage};
 
 #[cfg(target_os = "windows")]
 use i_slint_backend_winit::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+use snes_apu_spcp::ResamplingMode;
 
 #[cfg(target_os = "windows")]
 unsafe fn get_hwnd(window: &slint::Window) -> Option<*mut c_void> {
@@ -41,6 +44,17 @@ fn browse_for_spc() -> Option<PathBuf> {
     }
 }
 
+fn browse_for_wav() -> Option<PathBuf> {
+    let file_dialog = FileDialog::new()
+        .set_title("Export WAV")
+        .add_filter("WAVE Audio", &["wav"]);
+
+    match file_dialog.show_save_single_file() {
+        Ok(Some(path)) => Some(path),
+        _ => None
+    }
+}
+
 pub fn run() {
     let main_window = MainWindow::new().unwrap();
 
@@ -53,7 +67,29 @@ pub fn run() {
     let mut emulator = Emulator::new();
 
     let source = emulator.iter();
-    let audio_manager = Arc::new(Mutex::new(audio::AudioManager::new()));
+    let audio_manager = Arc::new(Mutex::new(AudioManager::new()));
+
+    let wav_exporter = {
+        let main_window_weak = main_window.as_weak();
+        Arc::new(Mutex::new(WavExporter::new(move |message| {
+            let (exporting, current_time, total_time) = match message {
+                WavExporterMessage::Progress { current_time, total_time } => {
+                    (true, current_time, total_time)
+                },
+                WavExporterMessage::Error(e) => {
+                    println!("Export error: {:?}", e);
+                    (false, Duration::ZERO, Duration::ZERO)
+                },
+                WavExporterMessage::Finished => (false, Duration::ZERO, Duration::ZERO)
+            };
+            main_window_weak.upgrade_in_event_loop(move |main_window| {
+                main_window.set_exporting(exporting);
+                main_window.set_export_current_time(current_time.as_millis() as i64);
+                main_window.set_export_total_time(total_time.as_millis() as i64);
+                main_window.invoke_play_pause();
+            }).unwrap();
+        })))
+    };
 
     {
         let main_window_weak = main_window.as_weak();
@@ -72,7 +108,7 @@ pub fn run() {
 
             let main_window_weak = main_window_weak.clone();
             std::thread::spawn(move || {
-                let device_names: Vec<slint::SharedString> = audio::AudioManager::device_names()
+                let device_names: Vec<slint::SharedString> = AudioManager::device_names()
                     .into_iter()
                     .map(|name| name.into())
                     .collect();
@@ -147,14 +183,17 @@ pub fn run() {
 
     {
         let main_window_weak = main_window.as_weak();
+        let source = source.clone();
         let audio_manager = audio_manager.clone();
+        let wav_exporter = wav_exporter.clone();
         let controls = controls.clone();
         main_window.on_open_spc(move || {
             let spc_path = match browse_for_spc() {
                 Some(path) => path,
                 None => return
             };
-            if let Some(spc) = emulator.load_spc(spc_path) {
+            wav_exporter.lock().unwrap().set_spc_path(&spc_path);
+            if let Some(spc) = source.load_spc(spc_path) {
                 let metadata = spc.metadata();
 
                 main_window_weak.unwrap().set_spc_title(metadata.song_title().unwrap_or_default().into());
@@ -193,7 +232,7 @@ pub fn run() {
         let audio_manager = audio_manager.clone();
         main_window.on_play_pause(move || {
             let audio_manager = audio_manager.lock().unwrap();
-            if !main_window_weak.unwrap().get_playing() || main_window_weak.unwrap().get_seeking() {
+            if !main_window_weak.unwrap().get_playing() || main_window_weak.unwrap().get_seeking() || main_window_weak.unwrap().get_exporting() {
                 audio_manager.pause();
             } else {
                 let playback_position = source.position();
@@ -214,6 +253,36 @@ pub fn run() {
             audio_manager.seek(Duration::from_millis(pos as u64));
             // Force buffering state to refresh Slider element
             main_window_weak.unwrap().set_buffer_length(0);
+        });
+    }
+
+    {
+        let main_window_weak = main_window.as_weak();
+        let wav_exporter = wav_exporter.clone();
+        main_window.on_export_wav(move || {
+            if main_window_weak.unwrap().get_exporting() {
+                wav_exporter.lock().unwrap().cancel();
+            } else {
+                let wav_path = match browse_for_wav() {
+                    Some(path) => path,
+                    None => return
+                };
+                wav_exporter.lock().unwrap().export(wav_path);
+            }
+        });
+    }
+
+    {
+        let source = source.clone();
+        main_window.on_sample_interpolation_type_selected(move |slint_mode| {
+            let mode = match slint_mode {
+                SampleInterpolationType::Accurate => ResamplingMode::Accurate,
+                SampleInterpolationType::Gaussian => ResamplingMode::Gaussian,
+                SampleInterpolationType::Linear => ResamplingMode::Linear,
+                SampleInterpolationType::Cubic => ResamplingMode::Cubic,
+                SampleInterpolationType::Sinc => ResamplingMode::Sinc
+            };
+            source.set_resampling_mode(mode);
         });
     }
 

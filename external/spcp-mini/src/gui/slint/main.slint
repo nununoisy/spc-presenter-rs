@@ -2,7 +2,8 @@ import { VerticalBox, HorizontalBox, Button, Slider } from "std-widgets.slint";
 import { WindowsWindowControls } from "./window-controls.slint";
 import { ToolbarButton } from "./toolbar-button.slint";
 import { FluentCard } from "./fluent-card.slint";
-import { AudioDeviceSelector } from "./audio-device-selector.slint";
+import { SettingsMenu, SampleInterpolationType } from "./settings-menu.slint";
+export { SampleInterpolationType }
 import { SeekBar, BufferingSeekBar } from "./seek-bar.slint";
 import { SlintApuChannelState, ApuChannelStateView, SlintApuMasterState, ApuMasterStateView } from "./apu-state-view.slint";
 export { SlintApuChannelState, SlintApuMasterState }
@@ -25,10 +26,10 @@ export component MainWindow inherits Window {
     in property <[SlintApuChannelState]> apu-channel-states: [{}, {}, {}, {}, {}, {}, {}, {}];
 
     property <bool> i-seek-bar-hovered: false;
-    property <bool> i-selecting-device: false;
+    property <bool> i-settings-open: false;
     property <bool> overlay-open: i-overlay-area.has-hover ||
-                                  i-navigation-button.has-hover ||
-                                  i-audio-select-button.has-hover ||
+                                  i-playlist-button.has-hover ||
+                                  i-settings-button.has-hover ||
                                   i-restart-button.has-hover ||
                                   i-play-button.has-hover ||
                                   i-repeat-button.has-hover ||
@@ -36,24 +37,35 @@ export component MainWindow inherits Window {
                                   i-open-button.has-hover ||
                                   i-window-controls.has-hover ||
                                   i-seek-bar-hovered ||
-                                  i-selecting-device;
-    property <bool> buffering: playback-position >= buffer-length;
+                                  i-settings-open ||
+                                  exporting;
+    property <bool> buffering: playback-position > buffer-length;
     property <duration> seek-position: 0s;
     out property <bool> seeking: false;
     out property <bool> repeat: false;
     out property <bool> repeat-infinite: false;
     out property <duration> fadeout-start: repeat-infinite ? 0s : spc-duration;
     out property <duration> playback-duration: repeat-infinite ? 0s : fadeout-start + spc-fadeout;
+
     in-out property <string> selected-device-name: "";
     in property <bool> updating-device-names: true;
     in property <[string]> device-names: [];
+
+    in property <bool> exporting: false;
+    in property <duration> export-current-time: 0s;
+    in property <duration> export-total-time: 0s;
 
     callback init-audio();
     callback play-pause();
     callback open-spc();
     callback seek(duration);
+    callback export-wav();
     pure callback format-duration(duration) -> string;
     pure callback update-devices();
+    callback sample-interpolation-type-selected(SampleInterpolationType);
+    callback volume-changed(float);
+    callback filter-enabled-selected(bool);
+    callback script700-enabled-selected(bool);
 
     in property <bool> macos-layout: false;
     in property <bool> maximized: false;
@@ -122,9 +134,10 @@ export component MainWindow inherits Window {
 
         pointer-event(ev) => {
             root.i-seek-bar-hovered = false;
+            i-settings.close-submenus();
 
             if (ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left) {
-                root.i-selecting-device = false;
+                root.i-settings-open = false;
                 if (resize-handle-hover-n || resize-handle-hover-e || resize-handle-hover-s || resize-handle-hover-w) {
                     root.start-window-resize(resize-handle-hover-n, resize-handle-hover-e, resize-handle-hover-s, resize-handle-hover-w);
                 } else {
@@ -222,19 +235,21 @@ export component MainWindow inherits Window {
                 height: 28px;
 
                 Text {
-                    text: root.seeking ? root.format-duration(root.seek-position) : root.format-duration(root.playback-position);
+                    text: root.exporting ? root.format-duration(root.export-current-time) :
+                          root.seeking ? root.format-duration(root.seek-position) : root.format-duration(root.playback-position);
                     width: 40px;
                     horizontal-stretch: 0;
                     horizontal-alignment: right;
                     vertical-alignment: center;
                 }
 
-                if root.buffering: BufferingSeekBar {}
-                if !root.buffering: SeekBar {
+                if root.buffering && !root.exporting: BufferingSeekBar {}
+                if !root.buffering || root.exporting: SeekBar {
                     minimum: 0;
-                    maximum: root.playback-duration / 1ms;
-                    value: clamp(root.playback-position / 1ms, 0, root.playback-duration / 1ms);
-                    buffer-length: clamp(root.buffer-length / 1ms, 0, root.playback-duration / 1ms);
+                    maximum: root.exporting ? root.export-total-time / 1ms : root.playback-duration / 1ms;
+                    value: root.exporting ? root.export-current-time / 1ms : clamp(root.playback-position / 1ms, 0, root.playback-duration / 1ms);
+                    buffer-length: root.exporting ? 0 : clamp(root.buffer-length / 1ms, 0, root.playback-duration / 1ms);
+                    enabled: !root.exporting;
                     hovered => {
                         root.i-seek-bar-hovered = true;
                     }
@@ -251,7 +266,8 @@ export component MainWindow inherits Window {
                 }
 
                 Text {
-                    text: root.buffering ? root.format-duration(root.buffer-length) :
+                    text: root.exporting ? root.format-duration(root.export-total-time) :
+                          root.buffering ? root.format-duration(root.buffer-length) :
                           root.repeat-infinite ? "∞" : root.format-duration(root.playback-duration);
                     width: 40px;
                     horizontal-stretch: 0;
@@ -266,15 +282,17 @@ export component MainWindow inherits Window {
                 alignment: stretch;
                 spacing: 8px;
 
-                i-navigation-button := ToolbarButton {
+                i-playlist-button := ToolbarButton {
                     width: self.height;
                     icon: @image-url("navigation.svg");
+                    enabled: !root.exporting;
                 }
-                i-audio-select-button := ToolbarButton {
+                i-settings-button := ToolbarButton {
                     width: self.height;
-                    icon: @image-url("speaker-settings.svg");
+                    icon: @image-url("settings.svg");
                     checkable: true;
-                    checked <=> root.i-selecting-device;
+                    checked <=> root.i-settings-open;
+                    enabled: !root.exporting;
                     clicked => {
                         root.update-devices();
                     }
@@ -283,6 +301,7 @@ export component MainWindow inherits Window {
                 i-restart-button := ToolbarButton {
                     width: self.height;
                     icon: @image-url("previous.svg");
+                    enabled: !root.exporting;
                     clicked => { root.seek(0s); }
                 }
                 i-play-button := ToolbarButton {
@@ -290,6 +309,7 @@ export component MainWindow inherits Window {
                     icon: root.playing ? @image-url("pause.svg") : @image-url("play.svg");
                     checkable: true;
                     checked <=> root.playing;
+                    enabled: !root.exporting;
                     clicked => {
                         root.play-pause();
                     }
@@ -298,7 +318,7 @@ export component MainWindow inherits Window {
                     width: self.height;
                     icon: root.repeat-infinite ? @image-url("infinity.svg") :
                           root.repeat ? @image-url("repeat-all.svg") : @image-url("repeat-all-off.svg");
-
+                    enabled: !root.exporting;
                     clicked => {
                         if (root.repeat-infinite) {
                             root.repeat = false;
@@ -313,11 +333,14 @@ export component MainWindow inherits Window {
                 Rectangle {}
                 i-export-button := ToolbarButton {
                     width: self.height;
-                    icon: @image-url("save-arrow.svg");
+                    icon: root.exporting ? @image-url("dismiss.svg") : @image-url("save-arrow.svg");
+                    destructive: root.exporting;
+                    clicked => { root.export-wav(); }
                 }
                 i-open-button := ToolbarButton {
                     width: self.height;
                     icon: @image-url("folder-open.svg");
+                    enabled: !root.exporting;
                     clicked => {
                         root.open-spc();
                     }
@@ -326,43 +349,35 @@ export component MainWindow inherits Window {
         }
     }
 
-    Rectangle {
-        property <length> i-y-animate-offset: i-selecting-device ? 0px : 16px;
-
-        x: 16px;
-        y: root.height - self.height - 60px + i-y-animate-offset;
+    i-settings := SettingsMenu {
+        x: i-settings-button.x;
+        y: root.height - self.height - 56px;
         z: 10;
-        height: 128px;
-        width: 232px;
-        opacity: root.i-selecting-device ? 1 : 0;
+        open: root.i-settings-open;
 
-        animate opacity, i-y-animate-offset {
-            duration: 200ms;
-            easing: ease-in-out;
+        updating: updating-device-names;
+        selected-device-name <=> selected-device-name;
+        device-names: device-names;
+
+        device-selected => {
+            self.close-submenus();
+            root.init-audio();
         }
-
-        FluentCard {
-            x: 0;
-            y: 0;
-            width: parent.width;
-            height: parent.height;
-            n: 8;
-
-            AudioDeviceSelector {
-                x: 16px;
-                y: 16px;
-                width: parent.width - 32px;
-                height: parent.height - 32px;
-                enabled: root.i-selecting-device;
-
-                updating: root.updating-device-names;
-                device-names: root.device-names;
-                selected-device-name <=> root.selected-device-name;
-                selected => {
-                    i-selecting-device = false;
-                    root.init-audio();
-                }
-            }
+        sample-interpolation-type-selected(t) => {
+            self.close-submenus();
+            root.sample-interpolation-type-selected(t);
+        }
+        volume-changed(v) => {
+            self.close-submenus();
+            root.volume-changed(v);
+        }
+        filter-enabled-selected(en) => {
+            self.close-submenus();
+            root.filter-enabled-selected(en);
+        }
+        script700-enabled-selected(en) => {
+            self.close-submenus();
+            root.script700-enabled-selected(en);
         }
     }
 }
