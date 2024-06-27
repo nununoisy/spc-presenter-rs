@@ -37,7 +37,7 @@ export component MainWindow inherits Window {
                                   i-window-controls.has-hover ||
                                   i-seek-bar-hovered ||
                                   i-selecting-device;
-    property <bool> buffering: playback-position > buffer-length;
+    property <bool> buffering: playback-position >= buffer-length;
     property <duration> seek-position: 0s;
     out property <bool> seeking: false;
     out property <bool> repeat: false;

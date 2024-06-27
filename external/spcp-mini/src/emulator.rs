@@ -89,7 +89,9 @@ fn spawn_emulator_thread(channel: mpsc::Receiver<EmulatorThreadMessage>, buffere
 
                     seek_position.store(0, Ordering::Release);
                     buffered_audio.write().unwrap().clear();
+                    buffered_audio.write().unwrap().shrink_to(minimum_end_position);
                     buffered_states.write().unwrap().clear();
+                    buffered_states.write().unwrap().shrink_to(minimum_end_position);
                     spc_loaded = true;
                 },
                 Ok(EmulatorThreadMessage::Terminate) => break 'main,
