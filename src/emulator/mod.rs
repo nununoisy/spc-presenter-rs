@@ -55,7 +55,7 @@ impl Emulator {
         let mut l_sample_buffer = vec![0i16; sample_count];
         let mut r_sample_buffer = vec![0i16; sample_count];
         if self.frame_count >= self.frame_delay {
-            self.apu.render(&mut l_sample_buffer, &mut r_sample_buffer, sample_count as i32);
+            self.apu.render(&mut l_sample_buffer, &mut r_sample_buffer, sample_count);
         }
 
         let mut combined_sample_buffer = self.resampler.run(&l_sample_buffer, &r_sample_buffer)?;
